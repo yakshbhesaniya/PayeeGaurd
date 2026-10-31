@@ -1,0 +1,43 @@
+{
+  "_note": "TEST DATA: synthetic payment history. Loaded by `python cli.py seed`: each vendor domain is resolved to a crustdata_company_id via Company Identify (free, cached), accounts are HMAC-fingerprinted, and PAID / PAID_FROM_DOMAIN edges are written with citation 'seed:samples/seed_history.json'. Raw account numbers are never stored in the graph.",
+  "vendors": [
+    {
+      "name": "Freshworks Inc",
+      "domain": "freshworks.com",
+      "sender_domain": "freshworks.com",
+      "account": {"label": "A", "swift": "CHASUS33", "account": "000123456789", "country": "US"},
+      "currency": "USD",
+      "payments": [
+        {"invoice_number": "INV-2026-1029", "amount": 4200.00, "paid_on": "2025-09-02"},
+        {"invoice_number": "INV-2026-1030", "amount": 4200.00, "paid_on": "2025-10-02"},
+        {"invoice_number": "INV-2026-1031", "amount": 4200.00, "paid_on": "2025-11-03"},
+        {"invoice_number": "INV-2026-1032", "amount": 4200.00, "paid_on": "2025-12-02"},
+        {"invoice_number": "INV-2026-1033", "amount": 4200.00, "paid_on": "2026-01-02"},
+        {"invoice_number": "INV-2026-1034", "amount": 4200.00, "paid_on": "2026-02-02"},
+        {"invoice_number": "INV-2026-1035", "amount": 4200.00, "paid_on": "2026-03-02"},
+        {"invoice_number": "INV-2026-1036", "amount": 4200.00, "paid_on": "2026-04-02"},
+        {"invoice_number": "INV-2026-1037", "amount": 4350.00, "paid_on": "2026-05-04"},
+        {"invoice_number": "INV-2026-1038", "amount": 4200.00, "paid_on": "2026-06-02"},
+        {"invoice_number": "INV-2026-1039", "amount": 4200.00, "paid_on": "2026-07-02"},
+        {"invoice_number": "INV-2026-1040", "amount": 4200.00, "paid_on": "2026-08-03"},
+        {"invoice_number": "INV-2026-1041", "amount": 4200.00, "paid_on": "2026-09-02"},
+        {"invoice_number": "INV-2026-1042", "amount": 4200.00, "paid_on": "2026-10-02"}
+      ]
+    },
+    {
+      "name": "Zoho Corporation",
+      "domain": "zoho.com",
+      "sender_domain": "zoho.com",
+      "account": {"label": "Z", "ifsc": "HDFC0000001", "account": "50200012345678", "country": "IN"},
+      "currency": "INR",
+      "payments": [
+        {"invoice_number": "ZH-55001", "amount": 210000.00, "paid_on": "2026-05-05"},
+        {"invoice_number": "ZH-55002", "amount": 210000.00, "paid_on": "2026-06-05"},
+        {"invoice_number": "ZH-55003", "amount": 210000.00, "paid_on": "2026-07-06"},
+        {"invoice_number": "ZH-55004", "amount": 210000.00, "paid_on": "2026-08-05"},
+        {"invoice_number": "ZH-55005", "amount": 210000.00, "paid_on": "2026-09-05"},
+        {"invoice_number": "ZH-55006", "amount": 210000.00, "paid_on": "2026-10-05"}
+      ]
+    }
+  ]
+}

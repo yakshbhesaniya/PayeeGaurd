@@ -1,0 +1,9 @@
+TEST DATA: synthetic, invented people
+From: Freshworks Billing <billing@freshworks.com>
+Subject: Invoice INV-2026-1043 - October subscription
+
+Hi Accounts team,
+Please find invoice INV-2026-1043 for USD 4,200.00 for October 2026.
+Vendor: Freshworks Inc, freshworks.com
+Payment to our existing account on file: Chase, SWIFT CHASUS33, account 000123456789 (United States).
+Thanks, Freshworks Billing

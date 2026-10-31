@@ -1,0 +1,14 @@
+{
+  "_note": "eval runs files in name order on a fresh graph loaded from seed_history.json; 05 must run before 06",
+  "01_legit.txt":                   {"decision": "PAY",   "attack_type": "none"},
+  "02_lookalike.txt":               {"decision": "BLOCK", "attack_type": "vendor_impersonation"},
+  "03_gmail_signatory.txt":         {"decision": "HOLD",  "attack_type": "unverified_signatory"},
+  "04_new_account_real_domain.txt": {"decision": "HOLD",  "attack_type": "compromised_vendor_mailbox"},
+  "05_zoho_lookalike_mule.txt":     {"decision": "BLOCK", "attack_type": "vendor_impersonation"},
+  "06_hero_freshworks_mule.txt":    {"decision": "BLOCK", "attack_type": "mule_campaign"},
+  "07_unknown_vendor.txt":          {"decision": "HOLD",  "attack_type": "unverifiable_vendor"},
+  "08_prompt_injection.txt":        {"decision": "BLOCK", "attack_type": "vendor_impersonation"},
+  "09_duplicate_invoice.txt":       {"decision": "HOLD",  "attack_type": "duplicate_replay"},
+  "10_api_down.txt":                {"decision": "HOLD",  "attack_type": "none",
+                                     "env": {"PAYEEGUARD_OFFLINE": "1", "PAYEEGUARD_CACHE_DIR": ".cache_empty"}}
+}

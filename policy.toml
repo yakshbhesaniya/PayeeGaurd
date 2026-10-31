@@ -1,0 +1,52 @@
+# PayeeGuard organisation policy. Read with tomllib by scoring.py, checks and gate.py.
+# Change thresholds only with all three teammates agreeing; record changes in docs/PayeeGuard_Master_Spec.md.
+
+[decision]
+block_risk = 60                 # R2
+hold_risk = 25                  # R4
+auto_pay_limit_usd = 5000       # R6: MEDIUM confidence auto-pays only up to this
+dual_approval_above_usd = 25000 # P2: two different reviewers required above this
+
+[fx_to_usd]                     # static rates, demo only
+USD = 1.0
+EUR = 1.08
+GBP = 1.27
+INR = 0.012
+
+[channel]
+# Count as a verified channel only as sender / Reply-To domain, never as payee name.
+trusted_processors = ["stripe.com", "razorpay.com", "bill.com", "paypal.com", "tipalti.com"]
+free_mail = ["gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com",
+             "yahoo.co.in", "proton.me", "protonmail.com", "icloud.com", "aol.com", "rediffmail.com",
+             "zohomail.com", "gmx.com", "mail.com", "yandex.com"]
+lookalike_min_label_len = 5
+
+[payment]
+# HMAC fingerprints of accounts legitimately shared by several vendors (factoring, aggregators).
+known_shared_accounts = []
+amount_anomaly_multiple = 3.0
+duplicate_window_days = 14
+
+[signatory]
+# Do not add a bare "account(s)": "Strategic Accounts" / "Account Management" are sales roles.
+payments_title_keywords = ["finance", "accounts receivable", "accounts payable", "accounting", "billing",
+                           "receivable", "payable", "controller", "treasury", "payments", "cfo", "collections"]
+min_headcount_for_absence_note = 50
+
+[buyer]
+# Our own company. Used to detect forwarded emails (a top-level From on this domain is a forward,
+# edge case E3) and for the insider fake-vendor check (P1). Empty = both features disabled.
+buyer_domain = ""
+
+[tactics]
+secrecy = ["keep this confidential", "don't call", "do not call", "do not discuss", "between us",
+           "strictly confidential"]
+channel_switch = ["server is down", "server down", "personal email", "reply only to this",
+                  "whatsapp me", "contact me on whatsapp", "new email address"]
+authority = ["ceo approved", "ceo has approved", "director has instructed", "on behalf of management",
+             "md has approved"]
+threat = ["account will be suspended", "legal action", "late fee", "service will stop",
+          "service will be discontinued", "penalty"]
+payment_method = ["bitcoin", "btc", "usdt", "crypto", "gift card", "personal account", "upi to"]
+urgency = ["urgent", "today", "immediately", "asap", "frozen", "within 24 hours", "right away",
+           "turant", "jaldi", "abhi pay karo", "aaj hi"]

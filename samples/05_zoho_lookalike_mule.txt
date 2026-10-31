@@ -1,0 +1,9 @@
+TEST DATA: synthetic, invented people
+From: Ananya Rao <ananya.rao@zoh0-billing.com>
+Subject: Zoho invoice ZH-55120 - updated remittance
+
+Dear customer, our Indian collection account is under maintenance.
+Please remit INR 2,10,000 for invoice ZH-55120 to our UK account:
+IBAN: GB82 WEST 1234 5698 7654 32  SWIFT: WESTGB2L
+Vendor: Zoho Corporation
+Regards, Ananya Rao, Accounts

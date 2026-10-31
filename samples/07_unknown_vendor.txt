@@ -1,0 +1,10 @@
+TEST DATA: synthetic, invented people and invented company
+From: Meera Joshi <accounts@zentrixglobal.example>
+Subject: Invoice ZGS-2026-0042 - consulting services, new bank details
+
+Dear Sir/Madam,
+Please find attached invoice ZGS-2026-0042 for INR 1,85,000 for IT consulting services.
+Kindly note our new bank details for this and future payments:
+Bank: ICICI Bank, Pune  IFSC: ICIC0001234  Account: 123405000789
+Vendor: Zentrix Global Solutions Pvt Ltd, zentrixglobal.example
+Regards, Meera Joshi, Accounts

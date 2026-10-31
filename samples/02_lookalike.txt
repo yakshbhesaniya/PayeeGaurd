@@ -1,0 +1,11 @@
+TEST DATA: synthetic, invented people
+---------- Forwarded message ---------
+From: Rohan Verma <rohan.verma@freshw0rks-billing.com>
+Subject: URGENT: updated bank details for invoice INV-2026-1043
+
+Dear customer, our previous bank account is under audit and frozen.
+Please pay USD 18,400.00 today to our new account:
+Bank: First Coastal Bank, Lagos, Nigeria  SWIFT: FCBKNGLA
+Vendor: Freshworks Inc
+Regards, Rohan Verma, Accounts Receivable
+> On Oct 2, Freshworks Billing wrote: ...earlier thread...

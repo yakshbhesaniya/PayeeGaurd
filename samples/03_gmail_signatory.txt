@@ -1,0 +1,8 @@
+TEST DATA: synthetic, invented people
+From: Kavya Iyer <kavya.iyer.finance@gmail.com>
+Subject: Freshworks invoice - remit to new account
+
+Hello, I am the Finance Manager at Freshworks (freshworks.com).
+Invoice FW-88213 for INR 3,45,000 is due. Kindly remit to our
+updated HDFC account in India. Using personal email as our server is down.
+Kavya Iyer, Finance Manager, Freshworks

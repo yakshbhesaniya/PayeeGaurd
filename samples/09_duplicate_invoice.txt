@@ -1,0 +1,9 @@
+TEST DATA: synthetic, invented people
+From: Freshworks Billing <billing@freshworks.com>
+Subject: Gentle reminder - invoice INV-2026-1031 outstanding
+
+Hi Accounts team,
+Our records show invoice INV-2026-1031 for USD 4,200.00 is still outstanding.
+Please pay to our account on file: Chase, SWIFT CHASUS33, account 000123456789 (United States).
+Vendor: Freshworks Inc, freshworks.com
+Thanks, Freshworks Billing

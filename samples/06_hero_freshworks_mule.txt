@@ -1,0 +1,10 @@
+TEST DATA: synthetic, invented people
+From: Freshworks Billing <billing@freshworks.com>
+Subject: Invoice INV-2026-1102 - remittance via our UK entity
+
+Hello Accounts team,
+Please find invoice INV-2026-1102 for USD 4,350.00 (November subscription).
+As part of our regional treasury setup, please remit this invoice to our UK entity account:
+IBAN: GB82 WEST 1234 5698 7654 32  SWIFT: WESTGB2L
+Vendor: Freshworks Inc, freshworks.com
+Thank you, Freshworks Billing
