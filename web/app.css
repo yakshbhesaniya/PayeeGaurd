@@ -387,3 +387,5 @@ details.more[open] summary { margin-bottom: 8px; }
 .impact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .impact span em { font-style: normal; color: var(--paper); font-weight: 600; }
 .hint { font-size: 12.5px; }
+
+.conn .dot.on.sim i { background: var(--hold); }

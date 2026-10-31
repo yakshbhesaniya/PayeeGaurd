@@ -1131,11 +1131,12 @@ ablation.py. Until A and B merge, use fake checks returning hard-coded Evidence 
 | **Slack alerts** | `ALERT_WEBHOOK_URL` | Every HOLD/BLOCK posts once per case | Webhook URL kept in `.env` only |
 | **Slack + mail history** | `SLACK_BOT_TOKEN` (+ IMAP) | C15 relationship history (section 7b) | Read-only; vendor mentions only; nothing stored but the cited snippet |
 | **Payment gateway** | `JUSPAY_API_KEY` + `JUSPAY_MERCHANT_ID` (+ `JUSPAY_BASE_URL`), or `RAZORPAY_KEY_ID/SECRET`, or `STRIPE_SECRET_KEY` | Releasing a payment creates a real gateway order/payment object | **Test/sandbox only**: `sk_test_`, `rzp_test_`, Juspay host must contain "sandbox"; live keys refused |
+| **Simulated gateway** | `PAYMENT_GATEWAY=simulate` | When no sandbox keys are set: releasing a payment returns a simulated gateway order (`sim_…`, status `captured`, amount/vendor/case) and the light reads "Payments · simulated" (amber) | Explicit opt-in only, never the default; every message says "no real API call, no money moved"; real Juspay/Razorpay/Stripe sandbox keys automatically take priority |
 | **Watchers** | `PAYEEGUARD_WATCHERS=1` | Crustdata entity watch on PAY | Off by default |
 
 Status lights in the masthead show which connections are live (green) vs demo mode (grey). Without credentials everything still works with drafts.
 
-**Live status at 13:40 IST:** Crustdata 🟢 · Inbox (Gmail, read-only) 🟢 · Email via Resend 🟢 · Slack alerts 🟢 · Slack + mail history 🟢 · Payments ⚪ (Juspay sandbox pending; Razorpay test keys as backup).
+**Live status at 13:40 IST:** Crustdata 🟢 · Inbox (Gmail, read-only) 🟢 · Email via Resend 🟢 · Slack alerts 🟢 · Slack + mail history 🟢 · Payments 🟠 **simulated gateway** (`PAYMENT_GATEWAY=simulate`) until Juspay sandbox or Razorpay test keys are added.
 
 ## 24. The desk UI as built **[BUILT]**
 
@@ -1161,7 +1162,7 @@ Status lights in the masthead show which connections are live (green) vs demo mo
 | **Merge `yaksh-crustdata` into `main`** (or set it as default) so judges see the final code | Yaksh | Must |
 | **Submit the form** (repo + Loom links, WhatsApp group) | Team | Must |
 | Update README and edge-case report for C12, C15, live integrations | Claude | Should |
-| Payment gateway keys (Juspay sandbox or Razorpay test) | Yaksh | Optional |
+| Payment gateway keys (Juspay sandbox or Razorpay test); simulated gateway works meanwhile | Yaksh | Optional |
 | Claude Desktop MCP connection for the "agent" moment | Bahul | Optional |
 | After the event: revoke the Gmail App Password, rotate Slack token and Resend key | Bahul / Yaksh | Must |
 

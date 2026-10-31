@@ -8,7 +8,7 @@ from payeeguard import integrations
 
 KEYS = ["IMAP_HOST", "IMAP_USER", "IMAP_PASSWORD", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_PORT",
         "SAFE_RECIPIENT", "EMAIL_TO_VENDOR", "STRIPE_SECRET_KEY", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET",
-        "ALERT_WEBHOOK_URL", "RESEND_API_KEY", "RESEND_FROM", "SLACK_BOT_TOKEN", "JUSPAY_API_KEY", "JUSPAY_MERCHANT_ID", "JUSPAY_BASE_URL"]
+        "ALERT_WEBHOOK_URL", "RESEND_API_KEY", "RESEND_FROM", "SLACK_BOT_TOKEN", "JUSPAY_API_KEY", "JUSPAY_MERCHANT_ID", "JUSPAY_BASE_URL", "PAYMENT_GATEWAY"]
 
 
 @pytest.fixture(autouse=True)
@@ -140,3 +140,13 @@ def test_juspay_production_host_refused(monkeypatch):
     monkeypatch.setenv("JUSPAY_BASE_URL", "https://api.juspay.in")
     r = integrations.create_payment("c1", 10, "INR", "V")
     assert not r["ok"] and "sandbox" in r["message"]
+
+
+def test_simulated_gateway_is_explicit_and_labelled(monkeypatch):
+    assert integrations.gateway_name() is None                      # never simulated by default
+    monkeypatch.setenv("PAYMENT_GATEWAY", "simulate")
+    r = integrations.create_payment("abc123def456", 4200.0, "USD", "Freshworks")
+    assert r["ok"] and r["gateway"] == "simulated" and r["id"].startswith("sim_") and "no money moved" in r["message"]
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_test_x")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "s")
+    assert integrations.gateway_name() == "razorpay"                # real sandbox keys always win

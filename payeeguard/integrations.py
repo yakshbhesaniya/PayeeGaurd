@@ -124,6 +124,8 @@ def gateway_name() -> str | None:
         return "stripe"
     if _env("RAZORPAY_KEY_ID").startswith("rzp_test_") and _env("RAZORPAY_KEY_SECRET"):
         return "razorpay"
+    if _env("PAYMENT_GATEWAY").lower() == "simulate":
+        return "simulated"                    # explicit opt-in; real sandbox keys above always win
     return None
 
 
@@ -140,6 +142,12 @@ def create_payment(case_id: str, amount: float | None, currency: str | None, ven
     cur = (currency or "USD").lower()
     minor = int(round(amount * 100))
     meta = {"case_id": case_id, "vendor": (vendor or "")[:80], "source": "payeeguard"}
+    if gw == "simulated":
+        import hashlib
+        oid = "sim_" + hashlib.sha256(f"{case_id}:{minor}:{cur}".encode()).hexdigest()[:14]
+        return {"ok": True, "gateway": "simulated", "id": oid, "status": "captured",
+                "message": f"SIMULATED gateway order {oid}: {cur.upper()} {amount:,.2f} to {vendor or 'vendor'} "
+                           "(no real API call, no money moved)", "dashboard": None}
     try:
         if gw == "juspay":
             order_id = f"pg-{case_id}-{minor}"
