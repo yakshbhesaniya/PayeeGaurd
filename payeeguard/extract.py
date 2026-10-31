@@ -141,7 +141,7 @@ def parse_number(s: str) -> float | None:
 NUM = r"\d[\d,.  ]*\d(?:\s*(?:lakhs?|lacs?|crores?))?|\d"
 MONEY_RE = re.compile(
     rf"(?P<pre>{CURRENCY_CODES}|Rs\.?|₹|\$|€|£)\s?(?P<n1>{NUM})(?:\s*/-)?"
-    rf"|(?P<n2>{NUM})\s?(?P<post>{CURRENCY_CODES}|€|£)\b", re.IGNORECASE)
+    rf"|(?P<n2>{NUM})\s?(?P<post>{CURRENCY_CODES}|€|£)(?![A-Za-z])", re.IGNORECASE)
 
 
 def _amounts(text: str) -> tuple[list[tuple[float, str, bool]], bool]:

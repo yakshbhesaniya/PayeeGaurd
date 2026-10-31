@@ -85,7 +85,8 @@ def resolve_case(case_id: str, decision: str, reviewer: str, note: str, graph: G
         graph.revoke(case_id)                                                # G-7
     graph.set_state(case_id, "APPROVED", d)
     audit.append("resolved", case_id=case_id, decision=decision, reviewer=reviewer, note=note)
-    return f"Case `{case_id}` {decision}d by {reviewer}. It can now be paid with `pay_invoice('{case_id}')`."
+    done = {"approve": "approved", "override": "overridden"}[decision]
+    return f"Case `{case_id}` {done} by {reviewer}. It can now be paid with `pay_invoice('{case_id}')`."
 
 
 def case_status(case_id: str, graph: Graph) -> str:
