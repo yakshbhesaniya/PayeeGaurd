@@ -335,3 +335,9 @@ table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
 @media (max-width: 900px) { .logo .mark { width: 44px; height: 44px; } }
 .logo .mark { width: 62px; height: 62px; }
 .logo .mark .ring { font-size: 11.5px; }
+
+/* ---- payment-checkpoint logo: a boom barrier raised over a verified money path ---- */
+.logo .mark { width: 70px; height: 59px; transform: none; }
+.logo:hover .mark g { animation: boom .9s cubic-bezier(.3, 1.3, .5, 1); transform-origin: 20px 20px; transform-box: view-box; }
+@keyframes boom { 0% { transform: rotate(-24deg); } 35% { transform: rotate(0deg); } 100% { transform: rotate(-24deg); } }
+@media (max-width: 900px) { .logo .mark { width: 54px; height: 46px; } }
