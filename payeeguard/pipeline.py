@@ -8,7 +8,7 @@ from datetime import datetime
 from . import __version__, audit, config, geo, report
 from .actions import build as build_actions
 from .checks_behaviour import check_c11, check_c14
-from .checks_channel import _brand_lookalike, check_c10, check_c2, check_c8, lookalike_reason
+from .checks_channel import check_c10, check_c2, check_c8, lookalike_reason
 from .checks_company import check_c1, check_c4, check_c5, check_c6, company_domains, onboard_facts
 from .checks_payment import check_payment
 from .checks_signatory import check_c3
@@ -217,8 +217,12 @@ def onboard_vendor(vendor_name: str, website: str, claims: dict | None = None, *
         real = f.get("real_domain")
         why = lookalike_reason(domain, real) if domain and real and domain != real else None
         if not why and domain and f["cid"] is None and f.get("brand"):
-            why = _brand_lookalike(domain, geo.skeleton(f["brand"]))   # no domain on record: compare with the name
-            real = real or f"the '{f['brand']}' brand"
+            # Only a vendor we already know by this name (graph) counts; a site containing its own name is normal.
+            for d in sorted(graph.known_domains_for_brand(geo.skeleton(f["brand"]))):
+                why = lookalike_reason(domain, d)
+                if why:
+                    real = d
+                    break
         if why:
             decision, reasons = "REJECT", [f"Website imitates {real}: {why}"] + reasons
         if decision != "REJECT" and f["cid"] is None:

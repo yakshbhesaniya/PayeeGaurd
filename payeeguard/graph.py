@@ -134,6 +134,13 @@ class Graph:
                             "AND revoked_at IS NULL LIMIT 1", (f"domain:{domain}",)).fetchone()
         return r["src"] if r else None
 
+    def known_domains_for_brand(self, brand_skeleton: str) -> set[str]:
+        """Domains of vendors we already know (paid, onboarded or resolved) whose name label matches the brand."""
+        rows = self.db.execute("SELECT DISTINCT dst FROM edges WHERE rel IN ('OWNS_DOMAIN','PAID_FROM_DOMAIN','ONBOARDED') "
+                               "AND revoked_at IS NULL").fetchall()
+        doms = {r["dst"].split(":", 1)[1] for r in rows}
+        return {d for d in doms if geo.skeleton(geo.label_of(d)) == brand_skeleton}
+
     def history_domains(self, company: str | None, exclude_case: str = "") -> set[str]:
         if not company:
             return set()

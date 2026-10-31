@@ -96,14 +96,17 @@ def check_c2(inv, ctx):
             out.append(ev("C2_lookalike", "CHANNEL", "Sender domain is not a lookalike of the vendor's domain",
                           "contradicted", f"Lookalike: {why}", src, hard=True))
             return out
-    brand = _brand(inv.vendor_name) or (geo.label_of(geo.registrable_domain(inv.vendor_domain))
-                                        if inv.vendor_domain else None)
-    if brand:
-        why = _brand_lookalike(host, geo.skeleton(brand))
-        if why and not (inv.vendor_domain and geo.registrable_domain(inv.vendor_domain) == s_reg and not real):
-            out.append(ev("C2_lookalike", "CHANNEL", "Sender domain is not a lookalike of the vendor's domain",
-                          "contradicted", f"Lookalike: {why}", f"extract:vendor_name#{brand}", hard=True))
-            return out
+    # Vendor not resolved: compare with domains of a vendor we already KNOW by that name (graph). A website that
+    # merely contains the vendor's own name is normal for an unknown vendor and is never treated as a lookalike.
+    brand = _brand(inv.vendor_name)
+    if brand and not real and ctx.get("graph") is not None:
+        for d in sorted(ctx["graph"].known_domains_for_brand(geo.skeleton(brand))):
+            why = lookalike_reason(host, d)
+            if why:
+                out.append(ev("C2_lookalike", "CHANNEL", "Sender domain is not a lookalike of the vendor's domain",
+                              "contradicted", f"Lookalike of known vendor domain: {why}", f"graph:OWNS_DOMAIN/{d}",
+                              hard=True))
+                return out
     if not real:
         if cid is None:
             out.append(unchecked("C2_domain", "CHANNEL", claim, "Vendor's real domains unknown (vendor not resolved)",
