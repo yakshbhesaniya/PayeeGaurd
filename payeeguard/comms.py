@@ -85,11 +85,15 @@ def search_slack(terms: list[str]) -> list[dict]:
     oldest = str(time.time() - LOOKBACK_DAYS * 86400)
     out = []
     with httpx.Client(timeout=10, headers=h) as c:
-        chans = c.get("https://slack.com/api/conversations.list",
-                      params={"types": "public_channel,private_channel", "exclude_archived": "true", "limit": 200}).json()
-        if not chans.get("ok"):
-            raise RuntimeError(f"Slack: {chans.get('error')}")
-        for ch in chans.get("channels", []):
+        channels = []
+        for types in ("public_channel", "private_channel"):        # private needs groups:read; optional
+            chans = c.get("https://slack.com/api/conversations.list",
+                          params={"types": types, "exclude_archived": "true", "limit": 200}).json()
+            if chans.get("ok"):
+                channels += chans.get("channels", [])
+            elif types == "public_channel":
+                raise RuntimeError(f"Slack: {chans.get('error')}")
+        for ch in channels:
             if not ch.get("is_member"):
                 continue
             cursor = None
