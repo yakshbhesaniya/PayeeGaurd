@@ -36,7 +36,9 @@ def status() -> dict:
         "crustdata": bool(_env("CRUSTDATA_API_KEY")),
         "inbox": bool(_env("IMAP_HOST") and _env("IMAP_USER") and _env("IMAP_PASSWORD")),
         "inbox_user": _env("IMAP_USER") or None,
-        "email": bool(_env("SMTP_HOST") and _env("SMTP_USER") and _env("SMTP_PASSWORD")),
+        "email": bool(_env("RESEND_API_KEY") or (_env("SMTP_HOST") and _env("SMTP_USER") and _env("SMTP_PASSWORD"))),
+        "email_via": "resend (https)" if _env("RESEND_API_KEY") else ("smtp" if _env("SMTP_HOST") else None),
+        "history": bool(_env("SLACK_BOT_TOKEN").startswith("xoxb-") or (_env("IMAP_HOST") and _env("IMAP_PASSWORD"))),
         "email_to": "vendor" if _env("EMAIL_TO_VENDOR") == "1" else (_env("SAFE_RECIPIENT") or _env("SMTP_USER") or None),
         "payments": gw is not None, "gateway": gw,
         "alerts": bool(_env("ALERT_WEBHOOK_URL")),
@@ -72,7 +74,7 @@ def verdict_alert(v, inv, base_url: str = "") -> str | None:
 
 def send_email(intended_to: str | None, subject: str, body: str) -> dict:
     if not status()["email"]:
-        return {"ok": False, "message": "Email not connected: add SMTP_HOST, SMTP_USER, SMTP_PASSWORD to .env"}
+        return {"ok": False, "message": "Email not connected: add RESEND_API_KEY (HTTPS) or SMTP_* to .env"}
     to_vendor = _env("EMAIL_TO_VENDOR") == "1"
     to = intended_to if (to_vendor and intended_to and "@" in intended_to) else (_env("SAFE_RECIPIENT") or _env("SMTP_USER"))
     msg = EmailMessage()
@@ -80,6 +82,18 @@ def send_email(intended_to: str | None, subject: str, body: str) -> dict:
     msg["To"] = to
     msg["Subject"] = subject if to_vendor else f"[PayeeGuard → intended for {intended_to or 'vendor'}] {subject}"
     msg.set_content(body)
+    if _env("RESEND_API_KEY"):
+        # HTTPS email API: works on networks that block SMTP ports (465/587), e.g. venue Wi-Fi.
+        try:
+            r = httpx.post("https://api.resend.com/emails", headers={"Authorization": f"Bearer {_env('RESEND_API_KEY')}"},
+                           json={"from": _env("RESEND_FROM") or "PayeeGuard <onboarding@resend.dev>", "to": [to],
+                                 "subject": msg["Subject"], "text": body}, timeout=15)
+            if r.status_code >= 300:
+                return {"ok": False, "message": f"Email failed (Resend HTTP {r.status_code}): {r.text[:120]}"}
+        except httpx.HTTPError as e:
+            return {"ok": False, "message": f"Email failed: {type(e).__name__}"}
+        note = "" if to_vendor else f" (safe mode: sent to {to} instead of {intended_to or 'the vendor'})"
+        return {"ok": True, "message": f"Email sent via Resend to {to}{note}.", "to": to}
     try:
         port = int(_env("SMTP_PORT") or "465")
         if port == 465:

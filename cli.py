@@ -151,6 +151,9 @@ def cmd_stress(args) -> int:
 
 def main(argv=None) -> int:
     config.setup_logging()
+    if argv is None and len(sys.argv) > 1 and sys.argv[1] in ("eval", "stress", "ablate"):
+        os.environ["COMMS_MAIL_SEARCH"] = "0"         # benchmarks must not depend on a live mailbox or Slack
+        os.environ["SLACK_BOT_TOKEN"] = ""
     p = argparse.ArgumentParser(prog="payeeguard", description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("seed")

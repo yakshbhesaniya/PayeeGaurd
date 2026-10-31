@@ -536,7 +536,7 @@ function offerResume() {
 let INTEG = {};
 async function loadIntegrations() {
   try { INTEG = await api("/api/integrations"); } catch { INTEG = {}; }
-  const items = [["crustdata", "Crustdata"], ["inbox", "Inbox"], ["email", "Email"], ["payments", INTEG.gateway ? `Payments · ${INTEG.gateway} test` : "Payments"], ["alerts", "Alerts"]];
+  const items = [["crustdata", "Crustdata"], ["inbox", "Inbox"], ["email", "Email"], ["payments", INTEG.gateway ? `Payments · ${INTEG.gateway} test` : "Payments"], ["alerts", "Alerts"], ["history", "Slack+mail history"]];
   $("#conn").innerHTML = items.map(([k, label]) => `<span class="dot ${INTEG[k] ? "on" : "off"}" title="${INTEG[k] ? "live" : "not connected: demo mode"}"><i></i>${esc(label)}</span>`).join("");
   if (INTEG.inbox) { pollLive(); setInterval(pollLive, 15000); }
 }

@@ -14,6 +14,7 @@ from .checks_company import (check_c1, check_c4, check_c5, check_c6, check_c12_t
                              onboard_facts)
 from .checks_payment import check_payment
 from .checks_signatory import check_c3
+from .comms import check_c15_relationship
 from .client import CrustdataClient
 from .evidence import ev, unchecked
 from .extract import case_id_for, cross_check, extract
@@ -94,7 +95,7 @@ def _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0, 
 
     for fn, name in ((check_c2, "C2_domain"), (check_c10, "C10_reply_to"), (check_c8, "C8_domain_age"),
                      (check_c4, "C4_shell"), (check_c12_tax, "C12_tax_id"), (check_c5, "C5_geo"), (check_c11, "C11_bank_format"),
-                     (check_c14, "C14_tactics"), (check_payment, "G_payment")):
+                     (check_c14, "C14_tactics"), (check_payment, "G_payment"), (check_c15_relationship, "C15_relationship")):
         evidence += _run(fn, inv, ctx, name)
     g1 = next((e for e in evidence if e.check == "G1_account_history"), None)
     ctx["account_change"] = inv.bank_change_requested or bool(g1 and g1.status == "contradicted")

@@ -88,6 +88,9 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("PAYEEGUARD_OFFLINE", "0")
     monkeypatch.setenv("PAYEEGUARD_FP_SECRET", "test-secret")
     monkeypatch.setenv("CRUSTDATA_API_KEY", "test-key")
+    for k in ("SLACK_BOT_TOKEN", "IMAP_HOST", "IMAP_USER", "IMAP_PASSWORD", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD",
+              "RESEND_API_KEY", "ALERT_WEBHOOK_URL", "STRIPE_SECRET_KEY", "RAZORPAY_KEY_ID", "JUSPAY_API_KEY"):
+        monkeypatch.setenv(k, "")                      # tests never reach real Slack, Gmail or gateways
     monkeypatch.setattr(config, "reports_dir", lambda: tmp_path / "reports")
     monkeypatch.setattr("time.sleep", lambda s: None)
     return tmp_path
