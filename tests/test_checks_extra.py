@@ -174,3 +174,20 @@ def test_lookalike_of_graph_known_vendor_when_crustdata_down(env, graph, monkeyp
     raw = email("Ops <ops@freshworks-billing.com>").replace("Freshworks Inc, freshworks.com", "Freshworks Inc")
     v, _ = verify(raw, client=c, graph=graph, save=False)
     assert checks(v)["C2_lookalike"].hard_block and v.decision == "BLOCK"
+
+
+def test_onboard_insider_conflict(client, graph, mock, monkeypatch):
+    """P1 insider check: a vendor founder who used to work at OUR company -> REVIEW with conflict of interest."""
+    from payeeguard import config
+    BUYER = {"crustdata_company_id": 777, "basic_info": {"name": "OurCo", "primary_domain": "ourco.com",
+                                                          "all_domains": ["ourco.com"]}}
+    mock.extra_domains["ourco.com"] = BUYER
+    vendor = {**FRESHWORKS, "people": {"founders": [{"crustdata_person_id": 9, "basic_profile": {"name": "Ravi Insider"},
+              "experience": {"employment_details": {"current": [{"crustdata_company_id": FW, "title": "Founder"}],
+                                                    "past": [{"crustdata_company_id": 777, "title": "Procurement Lead",
+                                                              "end_date": "2025-06-01"}]}}}], "cxos": []}}
+    mock.overrides["/company/enrich"] = (200, match(vendor))
+    pol = config.policy()
+    monkeypatch.setitem(pol["buyer"], "buyer_domain", "ourco.com")
+    d, md = onboard_vendor("Freshworks", "https://www.freshworks.com", client=client, graph=graph)
+    assert d == "REVIEW" and "Conflict of interest: Ravi Insider" in md

@@ -205,6 +205,35 @@ def create_watch(client, cid) -> str:
 
 # ---- Mode 2: vendor onboarding (spec 3.1) ---------------------------------------------------------
 
+def _insider(client, f, people, vendor_cid):
+    """Insider fake-vendor check (P1): does a founder/executive of the new vendor work or have worked at OUR company?
+    Uses employment history already returned by Enrich; one free Identify call to resolve our own company."""
+    from . import config
+    buyer = config.policy()["buyer"].get("buyer_domain")
+    if not buyer:
+        return
+    try:
+        best, _ = first_match(identify(client, domain=geo.registrable_domain(buyer)))
+    except Exception as e:  # noqa: BLE001
+        f["errors"].append(f"insider check: {describe(e)}")
+        return
+    if not best:
+        return
+    buyer_cid = best["company_data"]["crustdata_company_id"]
+    if buyer_cid == vendor_cid:
+        return
+    for p in (people.get("founders") or []) + (people.get("cxos") or []):
+        emp = (p.get("experience") or {}).get("employment_details") or {}
+        for kind in ("current", "past"):
+            for j in emp.get(kind) or []:
+                if j.get("crustdata_company_id") == buyer_cid:
+                    name = (p.get("basic_profile") or {}).get("name")
+                    when = "currently works" if kind == "current" else f"worked until {(j.get('end_date') or '?')[:7]}"
+                    f["off"].append(f"Conflict of interest: {name} (leader of this vendor) {when} at your company as "
+                                    f"{j.get('title') or 'staff'} [crustdata:person/{p.get('crustdata_person_id')}]")
+                    break
+
+
 def onboard_facts(client, vendor_name, website, claims=None):
     """Collect cited facts answering: is it real, who runs it, how old, is it trading, anything off?"""
     claims = claims or {}
@@ -268,6 +297,7 @@ def onboard_facts(client, vendor_name, website, claims=None):
                if j.get("crustdata_company_id") == cid]
         since = (cur[0].get("start_date") or "")[:7] if cur else ""
         f["leaders"].append((bp.get("name"), (cur[0].get("title") if cur else bp.get("current_title")), since, pid))
+    _insider(client, f, people, cid)
     lead = "; ".join(f"{n} ({t}{', since ' + s if s else ''})" for n, t, s, _ in f["leaders"][:5]) or "none listed"
     row("Who runs it?", lead, _cite(cid, "people.founders,people.cxos"))
     if not f["leaders"]:
