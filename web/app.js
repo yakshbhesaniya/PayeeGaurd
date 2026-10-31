@@ -61,7 +61,7 @@ $("#onbForm").addEventListener("submit", async (e) => {
   const f = new FormData(e.target), body = Object.fromEntries(f.entries());
   ["claimed_headcount", "claimed_offices"].forEach((k) => (body[k] = body[k] ? +body[k] : null));
   running(ONB_STEPS, "Checking the vendor…");
-  try { renderOnboarding(await api("/api/onboard", body), body); } catch (err) { fail(err); }
+  try { renderOnboarding(await api("/api/onboard", body), body); refreshStats(); } catch (err) { fail(err); }
 });
 
 $("#resetBtn").addEventListener("click", async () => {
@@ -69,7 +69,7 @@ $("#resetBtn").addEventListener("click", async () => {
   try {
     await api("/api/reset", {});
     Object.keys(seen).forEach((k) => delete seen[k]);
-    renderInbox(); showEmpty();
+    renderInbox(); showEmpty(); refreshStats();
   } catch (err) { fail(err); }
 });
 
@@ -99,6 +99,7 @@ async function investigate(raw, id) {
     await new Promise((r) => setTimeout(r, Math.max(0, 1600 - (Date.now() - t0))));   // let the steps read
     if (id) { seen[id] = data.verdict.decision; renderInbox(); document.querySelector(`#inbox li[data-i="${samples.emails.findIndex((m) => m.id === id)}"]`)?.classList.add("on"); }
     renderCase(data);
+    refreshStats();
   } catch (err) { fail(err); }
 }
 
@@ -197,6 +198,7 @@ async function gateCall(path, body) {
     tele.innerHTML = `<div class="teleprinter ${r.ok ? "good" : "bad"}"></div>`;
     type($(".teleprinter", tele), r.message);
     if (r.state) $("#statePill").textContent = r.state;
+    refreshStats();
   } catch (err) { tele.innerHTML = `<div class="teleprinter bad">${esc(err.message)}</div>`; }
 }
 
@@ -367,6 +369,7 @@ api("/api/samples").then((s) => {
   const h = decodeURIComponent(location.hash.slice(1));
   const i = h ? samples.emails.findIndex((m) => m.id.startsWith(h)) : -1;
   if (i >= 0) openEmail(i);
+  if (h === "vendors") { document.querySelector('.tab[data-tab="master"]').click(); screenList(null); }
   const o = h.match(/^onb(\d)$/);   // #onb1 runs onboarding example 1
   if (o && samples.onboarding[+o[1] - 1]) {
     document.querySelector('.tab[data-tab="onboard"]').click();

@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from conftest import FW, email, seed_freshworks
+from conftest import email, seed_freshworks
 from payeeguard import config, gate
 from payeeguard.client import CrustdataClient
 from payeeguard.extract import case_id_for, cross_check, extract, normalise_email

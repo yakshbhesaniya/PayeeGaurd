@@ -11,9 +11,9 @@
   --hold: #d99511;
   --pay: #1d7f47;
   --mark: #ffe45c;
-  --serif: "Instrument Serif", Georgia, serif;
-  --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  --serif: "Archivo", "Arial Narrow", sans-serif;     /* display face: condensed, heavy, like a printed form */
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -37,8 +37,13 @@ button { font: inherit; cursor: pointer; }
   display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;
   padding: 22px 32px 14px; border-bottom: 3px double var(--ink);
 }
-.logo { font: 44px/0.9 var(--serif); letter-spacing: -0.02em; }
-.logo em { font-style: italic; }
+.logo { display: inline-flex; align-items: stretch; font: 800 30px/1 var(--serif); font-stretch: 72%;
+  text-transform: uppercase; letter-spacing: .01em; border: 2.5px solid var(--ink); }
+.logo b { font-weight: 800; padding: 5px 8px 3px 9px; }
+.logo i { font-style: normal; background: var(--ink); color: var(--paper); padding: 5px 9px 3px 8px; }
+
+/* headline face everywhere: condensed and heavy */
+.empty h1, .running h2, .meta h2, .hyp-title, .leader b, .doc .mdh1 { font-stretch: 74%; font-weight: 750; letter-spacing: -0.005em; }
 .tag { margin-left: 14px; font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .14em; color: var(--ink-2); }
 .mast-right { display: flex; gap: 20px; align-items: center; font: 12px var(--mono); color: var(--ink-2); flex-wrap: wrap; }
 .live i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pay); margin-right: 7px;
@@ -129,8 +134,8 @@ textarea:focus, input:focus { border-color: var(--ink); box-shadow: 3px 3px 0 va
 /* ---- empty state ---- */
 .empty { max-width: 720px; padding-top: 40px; }
 .kicker { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .16em; color: var(--ink-2); margin: 0 0 10px; }
-.empty h1 { font: 76px/0.95 var(--serif); letter-spacing: -0.025em; margin: 0 0 22px; }
-.empty h1 em { background: linear-gradient(transparent 62%, var(--mark) 62% 90%, transparent 90%); }
+.empty h1 { font: 800 84px/0.92 var(--serif); font-stretch: 70%; text-transform: uppercase; letter-spacing: -0.005em; margin: 0 0 22px; }
+.empty h1 em { font-style: normal; background: linear-gradient(transparent 58%, var(--mark) 58% 92%, transparent 92%); }
 .lede { font-size: 17px; line-height: 1.55; color: var(--ink-2); max-width: 600px; }
 .legend { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 30px; font: 12px var(--mono); }
 .sw { display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -1px; }
@@ -293,3 +298,40 @@ table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
   .tray { padding: 14px 16px 24px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* Headline face applied last so shorthand `font:` rules above can't reset width/weight. */
+.empty h1, .running h2, .meta h2, .hyp-title, .leader b, .doc .mdh1 { font-family: var(--serif); font-stretch: 74%; font-weight: 750; letter-spacing: -0.005em; }
+.meta h2 { font-size: 40px; line-height: 1; }
+.hyp-title { font-size: 42px; line-height: 1; }
+.leader b { font-size: 22px; }
+.doc .mdh1 { font-size: 32px; }
+.tab { font-size: 11px; letter-spacing: .06em; padding: 10px 2px; white-space: nowrap; }
+@media (max-width: 900px) { .meta h2 { font-size: 32px; } .hyp-title { font-size: 32px; } }
+
+/* ---- logo: shield seal + wordmark (protection, not "institution") ---- */
+.logo { display: inline-flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0;
+  font: inherit; text-transform: none; }
+.logo .mark { width: 38px; height: 44px; flex: none; filter: drop-shadow(2px 2px 0 rgba(20,20,20,.18)); }
+.logo .word { display: grid; line-height: 1; }
+.logo .word b, .logo .word i { font: 600 34px/0.95 var(--serif); font-stretch: 82%; letter-spacing: -0.01em;
+  font-style: normal; background: none; color: var(--ink); padding: 0; display: inline; }
+.logo .word b { font-weight: 500; }
+.logo .word i { font-weight: 800; }
+.logo .word > b, .logo .word > i { grid-row: 1; }
+.logo .word > b { grid-column: 1; } .logo .word > i { grid-column: 2; }
+.logo .word small { grid-row: 2; grid-column: 1 / 3; font: 500 9.5px var(--mono); letter-spacing: .2em;
+  text-transform: uppercase; color: var(--pay); margin-top: 4px; }
+@media (max-width: 900px) { .logo .word b, .logo .word i { font-size: 28px; } .logo .mark { width: 32px; height: 37px; } }
+
+/* badges and headers must never break mid-word */
+.vstat, .ledger th, .statepill, .tagd, .chk { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+.hint.small { overflow-wrap: anywhere; }
+
+/* ---- notary-seal logo ---- */
+.logo .mark { width: 54px; height: 54px; transform: rotate(-10deg); filter: none; }
+.logo .mark .ring { font: 800 10.5px var(--serif); font-stretch: 75%; letter-spacing: .06em; }
+.logo:hover .mark { animation: reseal .6s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes reseal { 0% { transform: rotate(-10deg) scale(1); } 40% { transform: rotate(-4deg) scale(1.12); } 100% { transform: rotate(-10deg) scale(1); } }
+@media (max-width: 900px) { .logo .mark { width: 44px; height: 44px; } }
+.logo .mark { width: 62px; height: 62px; }
+.logo .mark .ring { font-size: 11.5px; }

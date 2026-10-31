@@ -48,6 +48,8 @@ class ExtractMeta:
     stated_country: str | None = None   # country named in the text (vs IBAN/SWIFT country)
     on_file: bool = False
     currency_assumed: bool = False
+    gstin: str | None = None
+    pan: str | None = None
 
 
 def case_id_for(raw_text: str) -> str:
@@ -281,6 +283,10 @@ def extract(raw_text: str) -> tuple[Invoice, ExtractMeta]:
     remit = (geo.iban_normalise(bank["iban"])[:2] if bank["iban"] else None) \
         or ("IN" if geo.is_ifsc(code) else geo.swift_country(code) if code else None) or meta.stated_country
     urgency = any(p in low for p in config.policy()["tactics"].get("urgency", []))
+    gm = re.search(geo.GSTIN_RE, body.upper())
+    meta.gstin = gm.group(1) if gm else None
+    pm = re.search(r"\bPAN(?:\s*(?:no\.?|number))?[:\s]*([A-Z]{5}\d{4}[A-Z])\b", body, re.IGNORECASE)
+    meta.pan = pm.group(1).upper() if pm else None
     inv_no = None
     m = re.search(r"\b([A-Z]{2,5}-\d{4}-\d{3,5}|[A-Z]{2,5}-\d{4,6})\b", (subject or "") + "\n" + body, re.IGNORECASE)
     if m:

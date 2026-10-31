@@ -158,3 +158,46 @@ def ifsc_valid(ifsc: str) -> bool:
 
 def is_ifsc(code: str | None) -> bool:
     return bool(code) and ifsc_valid(code)
+
+
+# ---- India GST / PAN ------------------------------------------------------------------------------------
+GST_STATES = {
+    "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
+    "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim",
+    "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura", "17": "Meghalaya",
+    "18": "Assam", "19": "West Bengal", "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh",
+    "24": "Gujarat", "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra", "29": "Karnataka",
+    "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry",
+    "35": "Andaman and Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh",
+}
+PAN_ENTITY = {"C": "company", "P": "individual", "F": "firm/LLP", "H": "HUF", "A": "association", "T": "trust",
+              "B": "body of individuals", "L": "local authority", "J": "artificial juridical person", "G": "government"}
+_GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+GSTIN_RE = r"\b(\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b"
+
+
+def gstin_check_char(first14: str) -> str:
+    """GSTIN checksum (mod-36 Luhn variant) over the first 14 characters."""
+    total = 0
+    for i, ch in enumerate(first14.upper()):
+        prod = _GST_CHARS.index(ch) * (1 if i % 2 == 0 else 2)
+        total += prod // 36 + prod % 36
+    return _GST_CHARS[(36 - total % 36) % 36]
+
+
+def gstin_valid(gstin: str) -> bool:
+    g = gstin.strip().upper()
+    if not re.fullmatch(GSTIN_RE[2:-2], g) or g[:2] not in GST_STATES:
+        return False
+    return gstin_check_char(g[:14]) == g[14]
+
+
+def office_state_in(address: str) -> str | None:
+    """'..., Chennai, Tamil Nadu, 600096, IN' -> 'Tamil Nadu' (Indian offices only)."""
+    parts = [p.strip() for p in address.split(",")]
+    if not parts or parts[-1].upper() != "IN":
+        return None
+    for p in reversed(parts[:-1]):
+        if p in GST_STATES.values():
+            return p
+    return None

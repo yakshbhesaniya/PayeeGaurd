@@ -334,3 +334,48 @@ def onboard_facts(client, vendor_name, website, claims=None):
     f["contact"] = {"phone": funding.get("phone_number"), "email": funding.get("contact_email"),
                     "website": info.get("website")}
     return f
+
+
+def check_c12_tax(inv, ctx):
+    """India GST/PAN: offline GSTIN checksum, PAN entity type vs company type, GSTIN state vs the vendor's Indian
+    offices from Crustdata. (Crustdata has no tax-ID fields; live GST-portal verification needs a licensed GSP API.)"""
+    meta = ctx.get("meta")
+    gstin, pan = (meta.gstin, meta.pan) if meta else (None, None)
+    claim = "Tax registration (GSTIN/PAN) is valid and consistent with the vendor"
+    if not gstin and not pan:
+        return [unchecked("C12_tax_id", "COMPANY", claim, "No GSTIN or PAN in the request", "extract", "not_applicable")]
+    src = "extract:regex#gstin (GST checksum, mod-36)"
+    if gstin and not geo.gstin_valid(gstin):
+        return [ev("C12_tax_id", "COMPANY", claim, "contradicted",
+                   f"GSTIN {gstin} fails its checksum or state code: mistyped or fabricated", src, 20)]
+    out = []
+    emb_pan = gstin[2:12] if gstin else None
+    if pan and emb_pan and pan != emb_pan:
+        out.append(ev("C12_tax_id", "COMPANY", claim, "contradicted",
+                      f"PAN {pan} does not match the PAN inside GSTIN {gstin} ({emb_pan})", src, 15))
+    the_pan = emb_pan or pan
+    entity = geo.PAN_ENTITY.get(the_pan[3]) if the_pan and len(the_pan) == 10 else None
+    company = ctx.get("company") or {}
+    ctype = ((company.get("basic_info") or {}).get("company_type") or "").lower()
+    if entity == "individual" and ("company" in ctype or "public" in ctype or "private" in ctype):
+        out.append(ev("C12_tax_id", "COMPANY", claim, "contradicted",
+                      f"{company['basic_info'].get('name')} is a {ctype} but the PAN belongs to an individual "
+                      f"({the_pan[3]} = individual): classic shell / personal-account pattern",
+                      f"{src} vs crustdata:company/{ctx.get('company_id')}#basic_info.company_type", 15))
+    if gstin and company:
+        states = {geo.office_state_in(a) for a in ((company.get("locations") or {}).get("all_office_addresses") or [])}
+        states.discard(None)
+        st = geo.GST_STATES.get(gstin[:2])
+        if states and st not in states:
+            out.append(ev("C12_tax_id", "COMPANY", claim, "contradicted",
+                          f"GSTIN is registered in {st}, but the vendor's Indian offices are in {', '.join(sorted(states))}",
+                          f"{src} vs crustdata:company/{ctx.get('company_id')}#locations.all_office_addresses", 10))
+        elif states:
+            out.append(ev("C12_tax_id", "COMPANY", claim, "verified",
+                          f"GSTIN valid ({entity or 'entity'} PAN), registered in {st} where the vendor has an office",
+                          f"{src} + crustdata:company/{ctx.get('company_id')}#locations"))
+    if out:
+        return out
+    return [ev("C12_tax_id", "COMPANY", claim, "verified",
+               f"{'GSTIN ' + gstin if gstin else 'PAN ' + pan} is well-formed ({entity or 'entity type unknown'}); "
+               "live GST-portal check not connected", src)]

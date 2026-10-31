@@ -7,9 +7,9 @@
 <meta name="description" content="Know your payee before money moves.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141414'/%3E%3Ctext x='16' y='23' font-family='Georgia' font-size='20' fill='%23F3EFE6' text-anchor='middle' font-style='italic'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23f3efe6' stroke='%23141414' stroke-width='8'/%3E%3Ccircle cx='50' cy='50' r='29' fill='%23141414'/%3E%3Cpath d='m37 51 9 9 17-19' fill='none' stroke='%235fd08f' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -20,7 +20,17 @@
 
 <header class="mast">
   <div class="mast-left">
-    <span class="logo">Payee<em>Guard</em></span>
+    <span class="logo" aria-label="PayeeGuard">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <defs><path id="sealRing" d="M50,50 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0"/></defs>
+        <circle cx="50" cy="50" r="47" fill="none" stroke="var(--ink)" stroke-width="3.5"/>
+        <circle cx="50" cy="50" r="43" fill="none" stroke="var(--ink)" stroke-width="1"/>
+        <circle cx="50" cy="50" r="27" fill="var(--ink)"/>
+        <text class="ring" fill="var(--ink)"><textPath href="#sealRing" textLength="222" lengthAdjust="spacingAndGlyphs">PAYEEGUARD · VERIFIED PAYEE ·</textPath></text>
+        <path d="m38.5 50.5 8 8.2 15-17" fill="none" stroke="#5fd08f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="word"><b>Payee</b><i>Guard</i><small>know who you pay</small></span>
+    </span>
     <span class="tag">Accounts-payable trust desk</span>
   </div>
   <div class="mast-right">
@@ -42,9 +52,9 @@
   <aside class="tray">
     <nav class="tabs" role="tablist">
       <button role="tab" class="tab on" data-tab="inbox">Inbox</button>
-      <button role="tab" class="tab" data-tab="paste">Paste email</button>
-      <button role="tab" class="tab" data-tab="onboard">New vendor</button>
-      <button role="tab" class="tab" data-tab="master">Vendor list</button>
+      <button role="tab" class="tab" data-tab="paste">Paste</button>
+      <button role="tab" class="tab" data-tab="onboard">Onboard</button>
+      <button role="tab" class="tab" data-tab="master">Vendors</button>
     </nav>
 
     <section class="pane on" id="pane-inbox">

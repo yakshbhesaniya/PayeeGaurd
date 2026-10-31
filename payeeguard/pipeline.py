@@ -10,7 +10,8 @@ from . import __version__, audit, geo, report
 from .actions import build as build_actions
 from .checks_behaviour import check_c11, check_c14
 from .checks_channel import check_c10, check_c2, check_c8, lookalike_reason
-from .checks_company import check_c1, check_c4, check_c5, check_c6, company_domains, onboard_facts
+from .checks_company import (check_c1, check_c4, check_c5, check_c6, check_c12_tax, company_domains,
+                             onboard_facts)
 from .checks_payment import check_payment
 from .checks_signatory import check_c3
 from .client import CrustdataClient
@@ -92,7 +93,7 @@ def _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0, 
     ctx["real_domains"] = company_domains(ctx.get("company")) | ctx["history_domains"]
 
     for fn, name in ((check_c2, "C2_domain"), (check_c10, "C10_reply_to"), (check_c8, "C8_domain_age"),
-                     (check_c4, "C4_shell"), (check_c5, "C5_geo"), (check_c11, "C11_bank_format"),
+                     (check_c4, "C4_shell"), (check_c12_tax, "C12_tax_id"), (check_c5, "C5_geo"), (check_c11, "C11_bank_format"),
                      (check_c14, "C14_tactics"), (check_payment, "G_payment")):
         evidence += _run(fn, inv, ctx, name)
     g1 = next((e for e in evidence if e.check == "G1_account_history"), None)

@@ -218,3 +218,39 @@ def test_llm_amount_grounded_in_indian_format():
     from payeeguard.extract import grounded
     assert grounded("amount", 345000, "Kindly remit Rs 3,45,000 by Friday")
     assert not grounded("amount", 345001, "Kindly remit Rs 3,45,000 by Friday")
+
+
+# ---- C12 India GST / PAN -------------------------------------------------------------------------------
+
+def _gstin(state="33", pan="AAGCF1234A"):
+    from payeeguard import geo
+    g = state + pan + "1Z"
+    return g + geo.gstin_check_char(g)
+
+
+def test_C12_valid_gstin_in_office_state(client, graph):
+    v, _ = verify(email(body=f"GSTIN: {_gstin()}"), client=client, graph=graph, save=False)
+    e = checks(v)["C12_tax_id"]
+    assert e.status == "verified" and "Tamil Nadu" in e.detail
+
+
+def test_C12_bad_checksum(client, graph):
+    g = _gstin()
+    bad = g[:-1] + ("A" if g[-1] != "A" else "B")
+    v, _ = verify(email(body=f"GSTIN: {bad}"), client=client, graph=graph, save=False)
+    assert checks(v)["C12_tax_id"].weight == 20
+
+
+def test_C12_individual_pan_for_company(client, graph):
+    v, _ = verify(email(body=f"GSTIN: {_gstin(pan='ABCPK1234D')}"), client=client, graph=graph, save=False)
+    assert any("individual" in e.detail for e in v.evidence if e.check == "C12_tax_id")
+
+
+def test_C12_state_without_office(client, graph):
+    v, _ = verify(email(body=f"GSTIN: {_gstin(state='27')}"), client=client, graph=graph, save=False)
+    assert any("Maharashtra" in e.detail and e.status == "contradicted" for e in v.evidence if e.check == "C12_tax_id")
+
+
+def test_C12_pan_mismatch(client, graph):
+    v, _ = verify(email(body=f"GSTIN: {_gstin()}  PAN: AAGCF9999Z"), client=client, graph=graph, save=False)
+    assert any("does not match" in e.detail for e in v.evidence if e.check == "C12_tax_id")
