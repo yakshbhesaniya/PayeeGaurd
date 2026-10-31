@@ -1,0 +1,9 @@
+{
+  "_note": "Company Identify response shape (top-level array). Ids from spec 6.2.",
+  "freshworks.com": [{"matched_on": "freshworks.com", "match_type": "domain",
+                      "matches": [{"confidence_score": 1.0, "company_data": {"crustdata_company_id": 6042422,
+                                   "basic_info": {"name": "Freshworks", "primary_domain": "freshworks.com"}}}]}],
+  "zoho.com": [{"matched_on": "zoho.com", "match_type": "domain",
+                "matches": [{"confidence_score": 1.0, "company_data": {"crustdata_company_id": 1032449,
+                             "basic_info": {"name": "Zoho", "primary_domain": "zoho.com"}}}]}]
+}
