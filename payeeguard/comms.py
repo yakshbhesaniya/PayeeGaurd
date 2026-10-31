@@ -98,7 +98,8 @@ def search_slack(terms: list[str]) -> list[dict]:
                 continue
             cursor = None
             for _ in range(5):                                   # up to ~1000 messages per channel
-                params = {"channel": ch["id"], "oldest": oldest, "limit": 200}
+                # Slack returned an empty list for this app when `oldest` was set, so filter dates ourselves.
+                params = {"channel": ch["id"], "limit": 100}
                 if cursor:
                     params["cursor"] = cursor
                 hist = c.get("https://slack.com/api/conversations.history", params=params).json()
@@ -106,6 +107,8 @@ def search_slack(terms: list[str]) -> list[dict]:
                     break
                 for m in hist.get("messages", []):
                     text = m.get("text") or ""
+                    if float(m.get("ts", "0")) < float(oldest) or m.get("bot_id") or m.get("subtype") == "bot_message":
+                        continue                                 # older than 12 months, or PayeeGuard's own alerts
                     if _mentions(text, terms):
                         when = datetime.fromtimestamp(float(m.get("ts", "0")), tz=timezone.utc)
                         out.append({"source": "slack", "where": f"#{ch.get('name')}", "when": when, "text": text,
