@@ -317,10 +317,40 @@ def cross_check(inv: Invoice, llm_fields: dict | None) -> tuple[Invoice, list[Ev
                     f"Claude passed {key}={_mask(key, val)!s} but the email text says {_mask(key, mine)!s}; "
                     "the text value is used", f"extract:regex#{key} vs extract:llm#{key}", 10))
             elif a is None:
-                setattr(inv, key, val)
+                # Grounding rule: an LLM may only POINT AT text, never invent it. A critical value the regex missed
+                # is accepted only if it literally appears in the email; otherwise it is ignored and reported.
+                if grounded(key, val, inv.raw_text):
+                    setattr(inv, key, val)
+                else:
+                    evidence.append(Evidence(
+                        "X1_extraction", "INTEGRITY", f"Claude's {key} appears in the email text", "contradicted",
+                        f"Claude passed {key}={_mask(key, val)!s}, which does not appear anywhere in the email; ignored",
+                        f"extract:llm#{key} not grounded in raw_text", 10))
         elif mine in (None, "", False):
             setattr(inv, key, val)
     return inv, evidence
+
+
+def grounded(key: str, value, raw_text: str) -> bool:
+    """True if a (normalised) LLM-extracted value is present in the raw email text."""
+    raw = raw_text or ""
+    if key in ("sender_email", "reply_to_email"):
+        e = normalise_email(str(value))
+        if not e:
+            return False
+        local, dom = e.split("@")
+        low = raw.lower()
+        return dom in low and local in low
+    if key == "amount":
+        try:
+            target = round(float(value), 2)
+        except (TypeError, ValueError):
+            return False
+        nums = [parse_number(m.group(0)) for m in re.finditer(r"\d[\d,.  ]*\d(?:\s*(?:lakhs?|lacs?|crores?))?|\d", raw)]
+        return any(n is not None and abs(n - target) < 0.01 for n in nums)
+    compact = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
+    v = re.sub(r"[^A-Za-z0-9]", "", str(value)).upper()
+    return len(v) >= 4 and v in compact
 
 
 def _norm_field(key: str, v):

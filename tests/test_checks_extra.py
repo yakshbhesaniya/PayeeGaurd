@@ -191,3 +191,30 @@ def test_onboard_insider_conflict(client, graph, mock, monkeypatch):
     monkeypatch.setitem(pol["buyer"], "buyer_domain", "ourco.com")
     d, md = onboard_vendor("Freshworks", "https://www.freshworks.com", client=client, graph=graph)
     assert d == "REVIEW" and "Conflict of interest: Ravi Insider" in md
+
+
+# ---- LLM grounding rule: Claude may point at text, never invent it ------------------------------------
+
+def test_llm_fills_gap_when_value_is_in_text():
+    from payeeguard.extract import cross_check, extract
+    raw = "From: a@vendor.io\n\nOur bank: the account number is 4455 6677 8899, bank code HDFC0001234. Total 1200 USD"
+    inv, _ = extract(raw)
+    inv.bank_account = None                      # pretend the regex missed the prose-style account
+    inv, ev = cross_check(inv, {"bank_account": "445566778899"})
+    assert inv.bank_account == "445566778899" and ev == []
+
+
+def test_llm_invented_account_is_ignored():
+    from payeeguard.extract import cross_check, extract
+    raw = "From: a@vendor.io\n\nPlease pay invoice V-1001 for USD 1,200.00 to the usual account."
+    inv, _ = extract(raw)
+    inv, ev = cross_check(inv, {"bank_iban": "GB82WEST12345698765432", "sender_email": "boss@bank.com",
+                                "amount": 99999})
+    assert inv.bank_iban is None and inv.sender_email == "a@vendor.io" and inv.amount == 1200.0
+    assert any("does not appear" in e.detail for e in ev)
+
+
+def test_llm_amount_grounded_in_indian_format():
+    from payeeguard.extract import grounded
+    assert grounded("amount", 345000, "Kindly remit Rs 3,45,000 by Friday")
+    assert not grounded("amount", 345001, "Kindly remit Rs 3,45,000 by Friday")
