@@ -1,4 +1,4 @@
-"""Payment gate and human-in-the-loop (spec section 11). The only way money (simulated) moves."""
+"""Payment gate and human-in-the-loop (spec section 11). The only way a payment is released to the payment queue."""
 
 import json
 from datetime import date
@@ -28,8 +28,8 @@ def pay_invoice(case_id: str, graph: Graph, client=None) -> str:
     if not case:
         return f"Unknown case `{case_id}`. Run verify_payee first."           # edge case P1
     d = case["data"]
-    if case["state"] == "PAID_SIMULATED":
-        return f"Refused: case `{case_id}` was already paid (simulated). No double payment."   # G-3
+    if case["state"] == "RELEASED":
+        return f"Refused: case `{case_id}` was already paid (released to the payment queue). No double payment."   # G-3
     if case["state"] not in PAYABLE:
         why = d.get("top_reason") or d.get("rule")
         audit.append("pay_refused", case_id=case_id, state=case["state"], reason=why)
@@ -53,14 +53,14 @@ def pay_invoice(case_id: str, graph: Graph, client=None) -> str:
     graph.record_payment(case_id, d["company_node"], d.get("invoice_number") or case_id, d.get("amount"),
                          d.get("currency"), fp, date.today().isoformat(), f"gate:pay_invoice@case:{case_id}",
                          d.get("sender_domain"))
-    graph.set_state(case_id, "PAID_SIMULATED")
+    graph.set_state(case_id, "RELEASED")
     _outbox({"case_id": case_id, "vendor": d.get("vendor"), "amount": d.get("amount"), "currency": d.get("currency"),
-             "account": fp.masked if fp else "account on file", "simulated": True})
-    h = audit.append("paid_simulated", case_id=case_id, amount=d.get("amount"), currency=d.get("currency"))
+             "account": fp.masked if fp else "account on file", "released_by": "payment gate", "requires_bank_upload": True})
+    h = audit.append("payment_released", case_id=case_id, amount=d.get("amount"), currency=d.get("currency"))
     watch = ""
     if client is not None and d.get("company_id") and not config.offline() and config.env("PAYEEGUARD_WATCHERS") == "1":
         watch = "\n" + create_watch(client, d["company_id"])
-    return (f"SIMULATED payment queued: {d.get('currency')} {d.get('amount'):,.2f} to {d.get('vendor')} "
+    return (f"RELEASED to the payment queue: {d.get('currency')} {d.get('amount'):,.2f} to {d.get('vendor')} "
             f"({fp.masked if fp else 'account on file'}). Vendor history updated. Audit {h[:12]}.{watch}")
 
 
@@ -86,7 +86,7 @@ def resolve_case(case_id: str, decision: str, reviewer: str, note: str, graph: G
         audit.append("resolved", case_id=case_id, decision="approve", reviewer=reviewer, note=note)
         n = len({a["reviewer"] for a in approvals if a["decision"] == "approve"})
         return f"Approval recorded for high-value case `{case_id}` ({n} of 2 different reviewers)."
-    if state in ("PAY", "PAID_SIMULATED"):
+    if state in ("PAY", "RELEASED"):
         return f"Case `{case_id}` is {state}: nothing to resolve."             # P3
     if decision == "override" and state != "BLOCK":
         return "override is only for a BLOCK that was wrong; use approve/reject for a HOLD"

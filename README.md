@@ -66,6 +66,7 @@ against a $367k average loss.
 | **Vendor-master screening** | A CSV of all your vendors | Cross-vendor alerts: shared bank accounts, duplicate vendor records, lookalike domains, accounts used in past attacks |
 | **Payment gate** | A case id | Releases a simulated payment only if the case is PAY or a human approved it |
 | **Agent guard API** | `POST /api/guard` from any AI payment agent | `{allow, decision, reasons, next_step}` before the agent pays |
+| **Memory** | Persistent payment-trust graph (survives refreshes and restarts) | Vendors and the accounts they're paid to, accounts tied to blocked attacks, onboarded vendors, recent cases: every new invoice is checked against all of it |
 
 **Interfaces:** a web desk (`web.py`), a CLI (`cli.py`), and an **MCP server** (`server.py`) so Claude Desktop or
 Claude Code can act as the AP agent. Claude reads and orchestrates; PayeeGuard decides.
@@ -145,7 +146,7 @@ cp .env.example .env     # add CRUSTDATA_API_KEY and PAYEEGUARD_FP_SECRET (gener
 
 | Command | What it does |
 |---|---|
-| `python web.py --reset` | Web desk on http://127.0.0.1:8787 (`#06` hero, `#onb1` onboarding, `#vendors` vendor screening) |
+| `python web.py` | Web desk on http://127.0.0.1:8787, keeping all memory (`--reset` wipes it). Deep links: `#06` hero, `#onb1` onboarding, `#vendors`, `#memory` |
 | `python cli.py eval` | 10 invoice samples + 3 onboarding requests vs expected verdicts |
 | `python -m pytest -q` | Full offline test suite (no network, no credits) |
 | `python cli.py stress` | Metamorphic rewrites of every sample must keep the same verdict |
@@ -220,7 +221,7 @@ only if it appears in the email text, so it can point at facts but never invent 
 - The API key and fingerprint secret live only in `.env` (git-ignored), and the graph refuses to start without a
   real secret.
 - People data is used only to verify a claimed role.
-- **Nothing sends email or moves money.** Every output is labelled SIMULATED / DRAFT, and watchers are opt-in.
+- **A human presses send.** PayeeGuard never emails anyone or moves money by itself: emails open pre-filled in your own mail app, the callback is a tap-to-call link to the official number, and payments are released to a queue for bank upload. Watchers are opt-in.
 - Every decision and human action goes into a **hash-chained audit log**; tampering is reported at the exact line.
 - The web server rejects path traversal, oversized bodies and non-object JSON, and never shows stack traces.
 

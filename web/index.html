@@ -33,11 +33,11 @@
 </header>
 
 <section class="impact" id="impact" aria-label="Impact so far">
-  <div><b id="stStopped">$0</b><span>held or blocked</span></div>
+  <div><b id="stStopped">$0</b><span id="stStoppedSub">blocked as fraud</span></div>
   <div><b id="stCases">0</b><span>requests investigated</span></div>
   <div class="split"><b><i class="pay" id="stPay">0</i> / <i class="hold" id="stHold">0</i> / <i class="block" id="stBlock">0</i></b><span>pay / hold / block</span></div>
   <div><b id="stMs">—</b><span>per decision</span></div>
-  <div><b id="stCredits">0</b><span>Crustdata credits used</span></div>
+  <div><b id="stCredits">—</b><span id="stCreditsSub">Crustdata credits left · live</span></div>
 </section>
 
 <main class="desk">
@@ -47,6 +47,7 @@
       <button role="tab" class="tab" data-tab="paste">Paste</button>
       <button role="tab" class="tab" data-tab="onboard">Onboard</button>
       <button role="tab" class="tab" data-tab="master">Vendors</button>
+      <button role="tab" class="tab" data-tab="memory">Memory</button>
     </nav>
 
     <section class="pane on" id="pane-inbox">
@@ -74,6 +75,12 @@
       </form>
       <p class="hint small">Try one:</p>
       <ul class="examples" id="onbExamples"></ul>
+    </section>
+
+    <section class="pane" id="pane-memory">
+      <p class="hint">Everything the agent has learned: vendors and the accounts they are paid to, accounts tied to blocked
+        attacks, onboarded vendors and recent cases. Kept across page refreshes and server restarts.</p>
+      <button class="btn ink" id="memRefresh">Refresh memory</button>
     </section>
 
     <section class="pane" id="pane-master">
@@ -104,7 +111,7 @@
 </main>
 
 <footer class="foot">
-  <span>Every decision is deterministic and cited. Nothing here sends email or moves money: all outputs are simulated.</span>
+  <span>Live Crustdata data · every decision cited · a human presses send: emails open in your mailbox, payments leave as bank-ready instructions.</span>
   <span id="footMeta"></span>
 </footer>
 

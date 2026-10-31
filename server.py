@@ -56,7 +56,7 @@ def onboard_vendor(vendor_name: str, website: str, claimed_country: str | None =
 
 @mcp.tool()
 def pay_invoice(case_id: str) -> str:
-    """Payment gate: pays (SIMULATED) only if the case is PAY or a human approved the HOLD. Otherwise refuses."""
+    """Payment gate: releases a payment only if the case is PAY or a human approved the HOLD. Otherwise refuses."""
     graph = Graph()
     try:
         return gate.pay_invoice(case_id, graph, _client)

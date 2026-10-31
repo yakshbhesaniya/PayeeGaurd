@@ -213,6 +213,34 @@ class Graph:
         rows = self.db.execute("SELECT * FROM cases ORDER BY created_at").fetchall()
         return [{**dict(r), "data": json.loads(r["data"] or "{}")} for r in rows]
 
+    def memory(self, recent: int = 12) -> dict:
+        """What the agent remembers: vendors paid, accounts flagged, vendors onboarded, recent cases (all cited)."""
+        vendors = []
+        for r in self.db.execute(
+                "SELECT e.src, n.label, COUNT(*) AS n, MAX(p.paid_on) AS last FROM edges e LEFT JOIN nodes n ON n.id=e.src "
+                "LEFT JOIN payments p ON p.company=e.src AND p.case_id=e.case_id WHERE e.rel='PAID' GROUP BY e.src "
+                "ORDER BY n DESC").fetchall():
+            accts = [f"••••{a['last4']} {a['country'] or ''}".strip() for a in self.accounts_paid(r["src"]).values()]
+            vendors.append({"node": r["src"], "name": (r["label"] or r["src"]).split(" (crustdata")[0], "payments": r["n"],
+                            "last_paid": r["last"], "accounts": accts})
+        flagged = []
+        for r in self.db.execute(
+                "SELECT e.src, e.case_id, e.observed_at, n.label, a.last4, a.country, c.data FROM edges e "
+                "LEFT JOIN nodes n ON n.id=e.src LEFT JOIN accounts a ON a.id=e.src LEFT JOIN cases c ON c.case_id=e.case_id "
+                "WHERE e.rel='FLAGGED_IN' AND e.revoked_at IS NULL AND e.src LIKE 'account:%' ORDER BY e.observed_at DESC").fetchall():
+            d = json.loads(r["data"] or "{}")
+            flagged.append({"account": f"••••{r['last4'] or '????'} {r['country'] or ''}".strip(), "case_id": r["case_id"],
+                            "attack": d.get("attack"), "claimed_vendor": d.get("vendor"), "at": r["observed_at"]})
+        onboarded = [{"domain": r["dst"].split(":", 1)[1], "node": r["src"], "at": r["observed_at"]} for r in self.db.execute(
+            "SELECT src, dst, observed_at FROM edges WHERE rel='ONBOARDED' ORDER BY observed_at DESC").fetchall()]
+        cases = [{"case_id": c["case_id"], "decision": c["decision"], "state": c["state"], "vendor": c["data"].get("vendor"),
+                  "amount": c["data"].get("amount"), "currency": c["data"].get("currency"),
+                  "attack": c["data"].get("attack"), "at": c["updated_at"]}
+                 for c in reversed(self.all_cases()) if not c["case_id"].startswith("seed")][:recent]
+        return {"vendors": vendors, "flagged": flagged, "onboarded": onboarded, "cases": cases,
+                "totals": {"vendors": len(vendors), "flagged": len(flagged), "onboarded": len(onboarded),
+                           "cases": len([c for c in self.all_cases() if not c["case_id"].startswith("seed")])}}
+
     def set_state(self, case_id: str, state: str, data: dict | None = None) -> None:
         if data is not None:
             self.db.execute("UPDATE cases SET state=?, data=?, updated_at=? WHERE case_id=?",

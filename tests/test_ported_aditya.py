@@ -775,7 +775,7 @@ def test_approved_bank_change_from_aditya(client, graph, outbox):
     seed_freshworks(graph)
     v, _ = verify(email(body=f"Please remit to our UK entity {HERO}"), client=client, graph=graph, save=False)
     gate.resolve_case(v.case_id, "approve", "Asha", "called vendor on official number", graph)
-    assert "SIMULATED" in gate.pay_invoice(v.case_id, graph)
+    assert "RELEASED" in gate.pay_invoice(v.case_id, graph)
     new, _ = verify(email(body=f"Pay {HERO}").replace("1043", "1201"), client=client, graph=graph, save=False)
     old, _ = verify(email(body=ON_FILE).replace("1043", "1202"), client=client, graph=graph, save=False)
     assert checks(new)["G1_account_history"].status == "verified"

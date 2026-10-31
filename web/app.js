@@ -24,12 +24,25 @@ document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () 
 }));
 $("#dateline").textContent = new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
+// Badge text + colour from the case state the server remembers: PAY / HOLD / BLOCK / APPROVED / PAID.
+function badge(m) {
+  const st = seen[m.id] || m.state;
+  if (!st) return null;
+  return { RELEASED: ["PAID", "PAY"], APPROVED: ["APPROVED", "PAY"] }[st] || [st, st];
+}
+
+/* ---------- remember what was open, so a refresh restores it ---------- */
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem("pg:last") || "null"); } catch { return null; } },
+  set(v) { try { localStorage.setItem("pg:last", JSON.stringify(v)); } catch { /* private mode: fine */ } },
+};
+
 function renderInbox() {
   $("#inbox").innerHTML = samples.emails.map((m, i) => `
-    <li data-i="${i}" tabindex="0" class="${seen[m.id] ? "tagged" : ""}">
+    <li data-i="${i}" tabindex="0" class="${badge(m) ? "tagged" : ""}">
       <span class="subj">${esc(m.subject)}</span><span class="amt">${esc(money(m.amount, m.currency))}</span>
       <span class="who">${esc(m.from_name ? m.from_name + " · " : "")}${esc(m.from || "no sender")}</span>
-      ${seen[m.id] ? `<span class="tagd ${seen[m.id]}">${seen[m.id]}</span>` : ""}
+      ${badge(m) ? `<span class="tagd ${badge(m)[1]}">${badge(m)[0]}</span>` : ""}
     </li>`).join("");
   document.querySelectorAll("#inbox li").forEach((li) => {
     const go = () => openEmail(+li.dataset.i);
@@ -47,19 +60,21 @@ function renderInbox() {
 }
 
 async function openEmail(i) {
+  store.set({ kind: "email", id: samples.emails[i].id });
   document.querySelectorAll("#inbox li").forEach((li) => li.classList.toggle("on", +li.dataset.i === i));
   await investigate(samples.emails[i].raw, samples.emails[i].id);
 }
 
 $("#pasteGo").addEventListener("click", () => {
   const raw = $("#pasteBox").value.trim();
-  if (raw) investigate(raw, null);
+  if (raw) { store.set({ kind: "raw", raw }); investigate(raw, null); }
 });
 
 $("#onbForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = new FormData(e.target), body = Object.fromEntries(f.entries());
   ["claimed_headcount", "claimed_offices"].forEach((k) => (body[k] = body[k] ? +body[k] : null));
+  store.set({ kind: "onboard", body });
   running(ONB_STEPS, "Checking the vendor…");
   try { renderOnboarding(await api("/api/onboard", body), body); refreshStats(); } catch (err) { fail(err); }
 });
@@ -69,6 +84,8 @@ $("#resetBtn").addEventListener("click", async () => {
   try {
     await api("/api/reset", {});
     Object.keys(seen).forEach((k) => delete seen[k]);
+    samples.emails.forEach((m) => { m.state = null; m.decision = null; });
+    store.set(null);
     renderInbox(); showEmpty(); refreshStats();
   } catch (err) { fail(err); }
 });
@@ -156,7 +173,7 @@ function renderCase(data) {
 
   <section class="sec"><h3><span>Finished work</span><span>${v.actions.length} documents</span></h3>
     <div class="docs"><ul class="doclist">${v.actions.map((a, i) => `<li data-i="${i}" class="${i ? "" : "on"}"><small>${esc(a.kind.replace(/_/g, " "))}</small>${esc(a.title)}</li>`).join("")}</ul>
-    <div class="doc" id="docBody">${md(v.actions[0]?.body || "")}</div></div>
+    <div class="doc" id="docBody"></div></div>
   </section>
 
   <section class="sec"><h3><span>Payment gate</span><span class="statepill" id="statePill">${esc(data.state)}</span></h3>
@@ -178,8 +195,9 @@ function renderCase(data) {
   $("#showVerified").addEventListener("change", (e) => document.querySelectorAll(".ledger tr.na").forEach((tr) => (tr.hidden = !e.target.checked)));
   document.querySelectorAll(".doclist li").forEach((li) => li.addEventListener("click", () => {
     document.querySelectorAll(".doclist li").forEach((x) => x.classList.toggle("on", x === li));
-    $("#docBody").innerHTML = md(v.actions[+li.dataset.i].body);
+    showDoc(v.actions[+li.dataset.i], v);
   }));
+  if (v.actions[0]) showDoc(v.actions[0], v);
   $("#payBtn").addEventListener("click", () => gateCall("/api/pay", { case_id: v.case_id }));
   document.querySelectorAll("[data-dec]").forEach((b) => b.addEventListener("click", () => {
     const f = $("#resolveForm");
@@ -207,7 +225,7 @@ function type(el, text) {
   const t = setInterval(() => { el.textContent = text.slice(0, (i += 3)); if (i >= text.length) clearInterval(t); }, 12);
 }
 
-const stripBanner = (s) => s.replace(/^> SIMULATED \/ DRAFT[^\n]*\n\n/, "");
+const stripBanner = (s) => s.replace(/^> DRAFT FOR HUMAN RELEASE[^\n]*\n\n/, "");
 
 /* Tiny, safe Markdown -> HTML for the finished-work documents. Everything is escaped FIRST, so text from an email
    can never inject markup; only our own patterns (headings, bold, code, lists, tables, citations) become HTML. */
@@ -323,11 +341,14 @@ async function refreshStats() {
   try {
     const s = await api("/api/stats");
     const set = (id, val) => { const el = $(id); if (el && el.textContent !== String(val)) { el.textContent = val; el.closest("b")?.classList.remove("bump"); void el.offsetWidth; el.closest("b")?.classList.add("bump"); } };
-    set("#stStopped", usd(s.stopped_usd));
+    set("#stStopped", usd(s.blocked_usd));
+    $("#stStoppedSub").textContent = `blocked as fraud · ${usd(s.held_usd)} on hold`;
     set("#stCases", s.cases);
     set("#stPay", s.by_decision.PAY || 0); set("#stHold", s.by_decision.HOLD || 0); set("#stBlock", s.by_decision.BLOCK || 0);
     set("#stMs", s.avg_ms == null ? "—" : s.avg_ms < 1000 ? `${s.avg_ms} ms` : `${(s.avg_ms / 1000).toFixed(1)} s`);
-    set("#stCredits", s.credits);
+    set("#stCredits", s.credits_balance == null ? "—" : Math.round(s.credits_balance).toLocaleString("en-US"));
+    $("#stCreditsSub").textContent = s.credits_balance == null ? "Crustdata balance unavailable (offline)"
+      : `Crustdata credits left · live · ${s.credits_spent ?? 0} spent this session`;
     lastStats = s;
   } catch { /* the strip is decorative; never block the desk */ }
 }
@@ -358,7 +379,7 @@ async function screenList(csv) {
     refreshStats();
   } catch (err) { fail(err); }
 }
-$("#screenSample").addEventListener("click", () => screenList(null));
+$("#screenSample").addEventListener("click", () => { store.set({ kind: "vendors" }); screenList(null); });
 $("#screenCsv").addEventListener("click", () => { const t = $("#csvBox").value.trim(); if (t) screenList(t); });
 
 refreshStats();
@@ -369,6 +390,8 @@ api("/api/samples").then((s) => {
   const h = decodeURIComponent(location.hash.slice(1));
   const i = h ? samples.emails.findIndex((m) => m.id.startsWith(h)) : -1;
   if (i >= 0) openEmail(i);
+  if (!h) restoreLast();
+  if (h === "memory") { document.querySelector('.tab[data-tab="memory"]').click(); }
   if (h === "vendors") { document.querySelector('.tab[data-tab="master"]').click(); screenList(null); }
   const o = h.match(/^onb(\d)$/);   // #onb1 runs onboarding example 1
   if (o && samples.onboarding[+o[1] - 1]) {
@@ -377,3 +400,85 @@ api("/api/samples").then((s) => {
     $("#onbForm").requestSubmit();
   }
 }).catch(fail);
+
+
+function restoreLast() {
+  const last = store.get();
+  if (!last) return;
+  if (last.kind === "email") { const i = samples.emails.findIndex((m) => m.id === last.id); if (i >= 0) openEmail(i); }
+  else if (last.kind === "raw") { document.querySelector('.tab[data-tab="paste"]').click(); $("#pasteBox").value = last.raw; investigate(last.raw, null); }
+  else if (last.kind === "vendors") { document.querySelector('.tab[data-tab="master"]').click(); screenList(null); }
+  else if (last.kind === "memory") { document.querySelector('.tab[data-tab="memory"]').click(); }
+  else if (last.kind === "onboard" && last.body) {
+    document.querySelector('.tab[data-tab="onboard"]').click();
+    const f = $("#onbForm"); Object.entries(last.body).forEach(([k, val]) => { if (f[k]) f[k].value = val ?? ""; });
+    f.requestSubmit();
+  }
+}
+
+/* ---------- Memory: what the agent remembers (persistent graph) ---------- */
+async function openMemory() {
+  store.set({ kind: "memory" });
+  $("#empty").hidden = true;
+  const v = $("#caseView"); v.hidden = false;
+  try {
+    const m = await api("/api/memory");
+    stopRunning();
+    const t = m.totals;
+    v.innerHTML = `
+      <div class="case-top"><div class="stampbox"><div class="stamp PAY">Memory<small>persistent payment graph</small></div></div>
+        <div class="meta"><p class="kicker">What PayeeGuard remembers</p><h2>${t.vendors} vendors · ${t.flagged} flagged accounts · ${t.cases} cases</h2>
+          <div class="sub">Every verdict, payment, approval and attack is kept across refreshes and restarts. The next invoice is
+            checked against all of it: that is how a perfect-looking email from a real vendor still gets blocked.</div></div></div>
+      <section class="sec"><h3><span>Accounts tied to blocked attacks</span><span>any future invoice paying these is hard-blocked</span></h3>
+        ${m.flagged.length ? `<div class="tablewrap"><table class="ledger"><thead><tr><th>Account</th><th>Attack</th><th>Claimed vendor</th><th>Case</th></tr></thead><tbody>
+        ${m.flagged.map((f) => `<tr class="c"><td class="chk">${esc(f.account)}</td><td class="det">${esc((f.attack || "").replace(/_/g, " "))}</td><td>${esc(f.claimed_vendor || "—")}</td><td class="src">${esc(f.case_id)} · ${esc((f.at || "").slice(0, 16))}</td></tr>`).join("")}
+        </tbody></table></div>` : `<p class="hint">No attacks remembered yet. Open sample 05 to see the agent learn one.</p>`}</section>
+      <section class="sec"><h3><span>Vendors and their payment history</span><span>new accounts on these vendors are never auto-paid</span></h3>
+        <div class="tablewrap"><table class="ledger"><thead><tr><th>Vendor</th><th>Payments</th><th>Accounts paid</th><th>Last paid</th></tr></thead><tbody>
+        ${m.vendors.map((x) => `<tr class="v"><td class="det"><b>${esc(x.name)}</b><span class="fam">${esc(x.node)}</span></td><td class="chk">${x.payments}</td><td class="chk">${esc(x.accounts.join(", "))}</td><td class="src">${esc(x.last_paid || "—")}</td></tr>`).join("")}
+        </tbody></table></div></section>
+      ${m.onboarded.length ? `<section class="sec"><h3><span>Onboarded vendors</span></h3><ul class="offlist">${m.onboarded.map((o) => `<li>${esc(o.domain)} <span class="fam">${esc(o.node)} · ${esc((o.at || "").slice(0, 16))}</span></li>`).join("")}</ul></section>` : ""}
+      <section class="sec"><h3><span>Recent cases</span></h3>
+        <div class="tablewrap"><table class="ledger"><thead><tr><th>Case</th><th>Vendor</th><th>Amount</th><th>Decision</th><th>State</th><th>Attack</th></tr></thead><tbody>
+        ${m.cases.map((c) => `<tr><td class="chk">${esc(c.case_id)}</td><td>${esc(c.vendor || "—")}</td><td class="chk">${esc(money(c.amount, c.currency))}</td><td><span class="vstat ${c.decision === "PAY" ? "OK" : c.decision === "HOLD" ? "REVIEW" : "ALERT"}">${esc(c.decision)}</span></td><td class="chk">${esc(c.state)}</td><td class="src">${esc((c.attack || "none").replace(/_/g, " "))}</td></tr>`).join("") || `<tr><td colspan="6" class="hint">No cases yet.</td></tr>`}
+        </tbody></table></div></section>`;
+  } catch (err) { fail(err); }
+}
+document.querySelector('.tab[data-tab="memory"]')?.addEventListener("click", openMemory);
+
+/* ---------- finished work: real actions a human takes ---------- */
+function docTools(a, v) {
+  const tools = [];
+  const body = stripBanner(a.body || "");
+  if (a.kind === "verification_email_draft") {
+    const to = (body.match(/^To:\s*(.+)$/m) || [])[1] || "";
+    const subj = (body.match(/^Subject:\s*(.+)$/m) || [])[1] || "Payment verification";
+    const text = body.replace(/^To:.*\n?/m, "").replace(/^Subject:.*\n?/m, "").trim();
+    const addr = /@/.test(to) ? to.trim() : "";
+    tools.push(`<a class="btn ink" href="mailto:${encodeURIComponent(addr)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(text)}">Open in my mail app</a>`);
+  }
+  const phone = ((v.callback || "").match(/\+?\d[\d\s().-]{7,}\d/) || [])[0];
+  if ((a.kind === "callback_script" || a.kind === "exception_ticket") && phone) {
+    tools.push(`<a class="btn" href="tel:${phone.replace(/[^\d+]/g, "")}">Call ${esc(phone)} (official number)</a>`);
+  }
+  tools.push(`<button class="btn ghost" data-download="1">Download .md</button>`);
+  return `<div class="doctools">${tools.join("")}</div>`;
+}
+const DOC_LABEL = { payment_instruction: "READY TO RELEASE", verification_email_draft: "DRAFT · YOU SEND",
+  callback_script: "CALL SCRIPT", exception_ticket: "FOR REVIEW", fraud_case_file: "CASE FILE",
+  do_not_pay_notice: "DO NOT PAY", kyb_onboarding_task: "KYB TASK", watcher: "MONITORING" };
+function showDoc(a, v) {
+  const el = $("#docBody");
+  if (!el || !a) return;
+  el.dataset.label = DOC_LABEL[a.kind] || "DOCUMENT";
+  el.innerHTML = docTools(a, v) + md(a.body || "");
+  el.querySelector("[data-download]")?.addEventListener("click", () => {
+    const blob = new Blob([stripBanner(a.body || "")], { type: "text/markdown" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob); link.download = `${v.case_id}_${a.kind}.md`; link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+}
+
+$("#memRefresh")?.addEventListener("click", openMemory);

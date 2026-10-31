@@ -93,6 +93,20 @@ class CrustdataClient:
     def get(self, path: str) -> Any:
         return self._crustdata("GET", path, None)
 
+    def get_live(self, path: str) -> Any:
+        """Uncached GET for values that change (e.g. /user/credits balance). Never written to the cache."""
+        if config.offline():
+            raise OfflineMiss(path)
+        if not self.api_key:
+            raise ApiError("CRUSTDATA_API_KEY missing")
+        r = self._send("GET", BASE_URL + path, path, None)
+        if r.status_code >= 400:
+            raise ApiError(f"{path} HTTP {r.status_code}")
+        try:
+            return r.json()
+        except ValueError as e:
+            raise ApiError(f"{path}: malformed JSON") from e
+
     def http_get_cached(self, url: str, headers: dict | None = None) -> tuple[int, Any]:
         """Cached GET for free non-Crustdata sources (RDAP, DNS-over-HTTPS). Returns (status, json|None)."""
         key = _cache_key("GET", url, None)

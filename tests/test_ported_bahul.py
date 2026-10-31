@@ -418,18 +418,18 @@ def test_gate_refuses_from_bahul(sg, outbox, name, status):
 
 def test_gate_pays_pay_once_from_bahul(sg, outbox):
     v = run(sg, "01_legit.txt")
-    assert gate.pay_invoice(v.case_id, sg[1]).startswith("SIMULATED")
-    assert len(outbox) == 1 and outbox[0]["simulated"] is True and "000123456789" not in json.dumps(outbox[0])
+    assert gate.pay_invoice(v.case_id, sg[1]).startswith("RELEASED")
+    assert len(outbox) == 1 and outbox[0]["requires_bank_upload"] is True and "000123456789" not in json.dumps(outbox[0])
     assert "already paid" in gate.pay_invoice(v.case_id, sg[1])
     assert len(outbox) == 1
 
 
 def test_gate_no_double_pay_after_reverify_from_bahul(sg, outbox):
-    """G-3: the same text verified again keeps PAID_SIMULATED and the gate still refuses."""
+    """G-3: the same text verified again keeps RELEASED and the gate still refuses."""
     v = run(sg, "01_legit.txt")
     gate.pay_invoice(v.case_id, sg[1])
     run(sg, "01_legit.txt")
-    assert sg[1].get_case(v.case_id)["state"] == "PAID_SIMULATED"
+    assert sg[1].get_case(v.case_id)["state"] == "RELEASED"
     assert "already paid" in gate.pay_invoice(v.case_id, sg[1]) and len(outbox) == 1
 
 
@@ -456,7 +456,7 @@ def test_dual_approval_distinct_on_pay_from_bahul(sg, outbox):
     gate.resolve_case(v.case_id, "approve", "asha", "ok", sg[1])
     assert "different reviewer" in gate.resolve_case(v.case_id, "approve", "asha", "again", sg[1])
     gate.resolve_case(v.case_id, "approve", "ravi", "second approver", sg[1])
-    assert gate.pay_invoice(v.case_id, sg[1]).startswith("SIMULATED")
+    assert gate.pay_invoice(v.case_id, sg[1]).startswith("RELEASED")
 
 
 def test_hold_reject_becomes_block_from_bahul(sg, outbox):
@@ -790,13 +790,13 @@ def test_no_full_account_in_outputs_from_bahul(sg, cached, outbox, monkeypatch):
 
 
 def test_artifacts_labelled_from_bahul(sg, cached):
-    """Y4: every outbound artifact (PAY / HOLD / BLOCK / unknown vendor) carries SIMULATED / DRAFT."""
+    """Y4: every outbound artifact (PAY / HOLD / BLOCK / unknown vendor) carries DRAFT FOR HUMAN RELEASE."""
     for name in ("01_legit.txt", "04_new_account_real_domain.txt", "02_lookalike.txt", "07_unknown_vendor.txt"):
         v = run(sg, name, save=True)
         assert v.actions
         for a in v.actions:
             text = (cached / a.path.replace("reports/", "reports/", 1)).read_text(encoding="utf-8")
-            assert "SIMULATED / DRAFT" in text, (name, a.kind)
+            assert "DRAFT FOR HUMAN RELEASE" in text, (name, a.kind)
 
 
 # ============================================================== test_samples.py

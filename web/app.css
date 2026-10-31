@@ -248,7 +248,7 @@ table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
 .doc .mdtable th { text-align: left; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; border-bottom: 1.5px solid var(--ink); padding: 5px 6px; }
 .doc .mdtable td { border-bottom: 1px solid var(--rule); padding: 6px; vertical-align: top; }
 .doc .mdtable td:last-child { font: 10.5px var(--mono); color: var(--ink-3); }
-.doc::before { content: "SIMULATED"; position: absolute; right: 16px; top: 12px; font: 700 12px var(--mono); letter-spacing: .3em;
+.doc::before { content: attr(data-label); position: absolute; right: 16px; top: 12px; font: 700 12px var(--mono); letter-spacing: .3em;
   color: var(--block); border: 2px solid var(--block); padding: 3px 7px; transform: rotate(6deg); opacity: .7; }
 
 .gatebar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
@@ -341,3 +341,7 @@ table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
 .logo:hover .mark g { animation: boom .9s cubic-bezier(.3, 1.3, .5, 1); transform-origin: 20px 20px; transform-box: view-box; }
 @keyframes boom { 0% { transform: rotate(-24deg); } 35% { transform: rotate(0deg); } 100% { transform: rotate(-24deg); } }
 @media (max-width: 900px) { .logo .mark { width: 54px; height: 46px; } }
+
+.doctools { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px dashed var(--rule-strong); }
+.doctools .btn { margin-top: 0; text-decoration: none; display: inline-block; font-size: 12.5px; padding: 8px 12px; }
+.tab { padding: 10px 1px; letter-spacing: .04em; }

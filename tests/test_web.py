@@ -65,7 +65,7 @@ def test_verify_pay_flow(server):
     assert code == 200 and d["verdict"]["decision"] == "PAY" and d["facts"] == {"who": True, "channel": True, "money": True}
     cid = d["verdict"]["case_id"]
     r = json.loads(call(server, "/api/pay", {"case_id": cid})[1])
-    assert r["ok"] and r["state"] == "PAID_SIMULATED"
+    assert r["ok"] and r["state"] == "RELEASED"
     r = json.loads(call(server, "/api/pay", {"case_id": cid})[1])
     assert not r["ok"] and "already paid" in r["message"]
 

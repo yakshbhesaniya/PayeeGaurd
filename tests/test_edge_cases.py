@@ -331,7 +331,7 @@ def test_G3_no_double_pay(client, graph):
     v, _ = verify(email(body="Pay to account on file: Chase SWIFT CHASUS33 account 000123456789"),
                   client=client, graph=graph, save=False)
     assert v.decision == "PAY"
-    assert "SIMULATED payment" in gate.pay_invoice(v.case_id, graph)
+    assert "RELEASED" in gate.pay_invoice(v.case_id, graph)
     assert "already paid" in gate.pay_invoice(v.case_id, graph)
 
 
@@ -446,7 +446,7 @@ def test_P2b_hold_needs_approval(client, graph):
     v, _ = verify(email(body=f"Please remit to our UK entity {HERO}"), client=client, graph=graph, save=False)
     assert v.decision == "HOLD" and gate.pay_invoice(v.case_id, graph).startswith("Refused")
     gate.resolve_case(v.case_id, "approve", "Asha", "called vendor on official number", graph)
-    assert "SIMULATED" in gate.pay_invoice(v.case_id, graph)
+    assert "RELEASED" in gate.pay_invoice(v.case_id, graph)
     # Approval taught the graph: the new account is now in this vendor's history.
     fp = graph.fingerprint(iban="GB82WEST12345698765432")
     assert fp.id in graph.accounts_paid(f"company:{FW}")
@@ -460,7 +460,7 @@ def test_P5_dual_approval_distinct(client, graph):
     assert "already recorded" in gate.resolve_case(v.case_id, "approve", "Asha", "again", graph)
     assert "dual-approval" in gate.pay_invoice(v.case_id, graph)
     gate.resolve_case(v.case_id, "approve", "Ravi", "second approver", graph)
-    assert "SIMULATED" in gate.pay_invoice(v.case_id, graph)
+    assert "RELEASED" in gate.pay_invoice(v.case_id, graph)
 
 
 def test_P6_audit_tamper_detected(env):
@@ -494,7 +494,7 @@ def test_Y1_Y2_no_raw_text_or_full_account_saved(client, graph, env):
 def test_Y4_artifacts_labelled(client, graph):
     v, _ = verify(email("Bad <bad@freshw0rks-pay.com>", body=f"New bank details: {HERO}"),
                   client=client, graph=graph, save=False)
-    assert v.actions and all("SIMULATED / DRAFT" in a.body for a in v.actions)
+    assert v.actions and all("DRAFT FOR HUMAN RELEASE" in a.body for a in v.actions)
 
 
 def test_bank_change_without_account_is_not_on_file(client, graph):

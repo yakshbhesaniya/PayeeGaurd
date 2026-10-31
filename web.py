@@ -46,15 +46,32 @@ def ensure_seeded(reset: bool = False) -> list[str]:
 
 
 def samples() -> dict:
+    """Inbox samples, each with its current case state from the graph (so badges survive a page refresh)."""
+    from payeeguard.extract import case_id_for
     out = []
-    for p in sorted(SAMPLES.glob("*.txt")):
-        raw = p.read_text(encoding="utf-8")
-        inv, meta = extract(raw)
-        subject = next((ln.split(":", 1)[1].strip() for ln in raw.splitlines() if ln.lower().startswith("subject:")), p.stem)
-        out.append({"id": p.stem, "subject": subject, "from": inv.sender_email, "from_name": meta.display_name,
-                    "amount": inv.amount, "currency": inv.currency, "raw": raw})
+    g = _graph()
+    try:
+        for p in sorted(SAMPLES.glob("*.txt")):
+            raw = p.read_text(encoding="utf-8")
+            inv, meta = extract(raw)
+            subject = next((ln.split(":", 1)[1].strip() for ln in raw.splitlines()
+                            if ln.lower().startswith("subject:")), p.stem)
+            case = g.get_case(case_id_for(raw))
+            out.append({"id": p.stem, "subject": subject, "from": inv.sender_email, "from_name": meta.display_name,
+                        "amount": inv.amount, "currency": inv.currency, "raw": raw,
+                        "decision": case["decision"] if case else None, "state": case["state"] if case else None})
+    finally:
+        g.close()
     onb = json.loads((SAMPLES / "onboarding.json").read_text(encoding="utf-8"))["requests"]
     return {"emails": out, "onboarding": onb}
+
+
+def api_memory(_body: dict | None = None) -> dict:
+    g = _graph()
+    try:
+        return g.memory()
+    finally:
+        g.close()
 
 
 def api_verify(body: dict) -> dict:
@@ -107,21 +124,39 @@ def api_stats(_body: dict | None = None) -> dict:
         g.close()
     from payeeguard.scoring import to_usd
     by = {"PAY": 0, "HOLD": 0, "BLOCK": 0}
-    stopped = paid = 0.0
+    blocked = held = paid = case_credits = 0.0
     ms = []
     for c in cases:
         d = c["data"]
         by[c["decision"]] = by.get(c["decision"], 0) + 1
         usd = to_usd(d.get("amount"), d.get("currency")) or 0.0
-        if c["state"] in ("BLOCK", "HOLD"):
-            stopped += usd
-        if c["state"] == "PAID_SIMULATED":
+        if c["state"] == "BLOCK":
+            blocked += usd
+        elif c["state"] == "HOLD":
+            held += usd
+        elif c["state"] == "RELEASED":
             paid += usd
         if d.get("ms") is not None:
             ms.append(d["ms"])
-    return {"cases": len(cases), "by_decision": by, "stopped_usd": round(stopped, 2), "paid_usd": round(paid, 2),
-            "avg_ms": round(sum(ms) / len(ms)) if ms else None, "credits": round(CLIENT.credits, 1),
-            "live_calls": CLIENT.calls}
+        case_credits += d.get("credits") or 0.0
+    return {"cases": len(cases), "by_decision": by, "blocked_usd": round(blocked, 2), "held_usd": round(held, 2),
+            "stopped_usd": round(blocked + held, 2), "paid_usd": round(paid, 2),
+            "avg_ms": round(sum(ms) / len(ms)) if ms else None, "live_calls": CLIENT.calls,
+            "credits_session": round(CLIENT.credits, 1), "credits_cases": round(case_credits, 1), **_balance()}
+
+
+_START_BALANCE: list[float] = []
+
+
+def _balance() -> dict:
+    """Live Crustdata credit balance (uncached GET /user/credits), and how much this server session has spent."""
+    try:
+        bal = float(CLIENT.get_live("/user/credits").get("credits"))
+    except Exception:  # noqa: BLE001 - offline or API down: the strip just shows a dash
+        return {"credits_balance": None, "credits_spent": None}
+    if not _START_BALANCE:
+        _START_BALANCE.append(bal)
+    return {"credits_balance": round(bal, 2), "credits_spent": round(_START_BALANCE[0] - bal, 2)}
 
 
 def api_screen(body: dict) -> dict:
@@ -178,6 +213,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, samples())
         if path == "/api/stats":
             return self._json(200, api_stats())
+        if path == "/api/memory":
+            return self._json(200, api_memory())
         if path.startswith("/api/case/"):
             g = _graph()
             try:

@@ -203,7 +203,7 @@ def _write_graph(v: Verdict, inv, ctx, graph: Graph, hyp, s) -> None:
         data["approvals"] = old["data"].get("approvals", [])
         data["voided"] = "approval voided: new hard evidence on re-verification"
         graph.save_case(case_id, v.decision, "BLOCK", data)          # a new BLOCK voids an earlier human approval
-    elif old and old["state"] in ("APPROVED", "PAID_SIMULATED"):
+    elif old and old["state"] in ("APPROVED", "RELEASED"):
         data["approvals"] = old["data"].get("approvals", [])
         graph.save_case(case_id, v.decision, old["state"], data)    # keep human decisions on re-run
     else:
