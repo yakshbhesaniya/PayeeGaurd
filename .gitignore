@@ -8,3 +8,4 @@ __pycache__/
 reports/
 data/
 payments/
+.cache_empty/
