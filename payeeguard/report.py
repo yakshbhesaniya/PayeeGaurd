@@ -60,14 +60,16 @@ def render(verdict: Verdict, inv, ctx, full: bool = True) -> str:
             else (f"unchecked ({e.unchecked_reason})" if e.status == "unchecked" else "verified")
         out.append(f"| {i} | {e.family} | {e.check} | {e.claim} | {res} | {_cell(e.detail)} | `{e.source}` |")
     if len(shown) < len(rows):
-        out.append(f"\n_{len(rows) - len(shown)} more rows in the full report._")
+        out.append(f"\n_{len(rows) - len(shown)} more rows in the full report: reports/{verdict.case_id}/report.md_")
     out += ["", "## Finished work"]
     out += [f"- **{a.title}**" + (f" → `{a.path}`" if a.path else "") for a in verdict.actions] or ["- none"]
     out += ["", "## Safe next step", _next_step(verdict, ctx), "",
             f"Generated {ctx.get('received_at')} · {verdict.crustdata_calls} live Crustdata calls "
             f"({ctx.get('cache_hits', 0)} from cache) · ≈{verdict.crustdata_credits:.1f} credits"]
     text = "\n".join(out)
-    return text if len(text) <= MAX_CHARS else text[:MAX_CHARS] + "\n\n_(truncated; see the report file)_"
+    if full or len(text) <= MAX_CHARS:          # the saved report.md is never truncated (edge case M5)
+        return text
+    return text[:MAX_CHARS] + f"\n\n_(truncated for chat; full report: reports/{verdict.case_id}/report.md)_"
 
 
 def _cell(s: str) -> str:

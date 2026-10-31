@@ -4,6 +4,8 @@ Not found is `unchecked` (Crustdata doesn't index every AR clerk). Only positive
 ex-employee (35), works elsewhere (30), real employee outside a payments role asking for a bank change (20).
 """
 
+import re
+
 from . import config, geo
 from .client import NotEnabled
 from .evidence import describe, ev, first_match, reason_for, unchecked
@@ -25,6 +27,22 @@ def _is_finance(job: dict, title: str | None) -> bool:
     t = (title or job.get("title") or "").lower()
     kws = config.policy()["signatory"]["payments_title_keywords"]
     return any(f in fc for f in FIN_FUNCTIONS) or any(k in t for k in kws)
+
+
+def _tokens(name: str | None) -> list[str]:
+    import unicodedata
+    n = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return [t for t in re.findall(r"[a-z]+", n) if len(t) > 1]
+
+
+def _same_name(claimed: str | None, profile: str | None) -> bool:
+    """First and last name tokens must both match (order-insensitive); middle names may differ."""
+    a, b = _tokens(claimed), _tokens(profile)
+    if not a or not b:
+        return False
+    if len(a) == 1 or len(b) == 1:
+        return a[0] in b or b[0] in a
+    return {a[0], a[-1]} <= set(b) or {b[0], b[-1]} <= set(a)
 
 
 def check_c3(inv, ctx):
@@ -63,6 +81,9 @@ def check_c3(inv, ctx):
         return [unchecked("C3_signatory", "SIGNATORY", claim, f"Person lookup failed: {describe(e)}",
                           "crustdata:person/search", reason_for(e))]
 
+    if not by_email:
+        # Search is a word match, so "Asha Rao" can return "Asha Menon": keep only profiles whose name really matches.
+        profiles = [p for p in profiles if _same_name(inv.sender_name, (p.get("basic_profile") or {}).get("name"))]
     current = [p for p in profiles if any(j.get("crustdata_company_id") == cid for j in _jobs(p, "current"))]
     ex = [p for p in profiles if p not in current and any(j.get("crustdata_company_id") == cid for j in _jobs(p, "past"))]
     if current:
@@ -78,8 +99,11 @@ def check_c3(inv, ctx):
         job = next(j for j in _jobs(pick, "current") if j.get("crustdata_company_id") == cid)
         title = job.get("title")
         cite = f"crustdata:person/{pid}#experience.employment_details.current"
+        others = [j.get("name") or "?" for j in _jobs(pick, "current") if j.get("crustdata_company_id") != cid]
+        also = f" (also currently at {', '.join(others)})" if others else ""          # edge case D13
         out = [ev("C3_signatory", "SIGNATORY", claim, "verified",
-                  f"{inv.sender_name} works at {vendor} as {title} since {(job.get('start_date') or '?')[:7]}", cite)]
+                  f"{inv.sender_name} works at {vendor} as {title} since {(job.get('start_date') or '?')[:7]}{also}",
+                  cite)]
         if ctx.get("account_change") and not _is_finance(job, title):
             out.append(ev("C3_role_authority", "SIGNATORY", "Sender's role covers payment details", "contradicted",
                           f"{inv.sender_name} is a real employee but works as '{title}', not in finance/payments, "

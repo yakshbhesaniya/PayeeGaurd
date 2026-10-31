@@ -35,7 +35,10 @@ def family_risk(evidence: list[Evidence]) -> dict[str, int]:
 
 
 def confidence_of(evidence: list[Evidence], vendor_known: bool) -> tuple[str, dict]:
-    confirmed = {e.confirms for e in evidence if e.status == "verified" and e.confirms}
+    bad_bank = any(e.check == "C11_bank_format" and e.status == "contradicted" for e in evidence)
+    # Geography alone can't confirm MONEY for a first-time vendor if the bank details themselves are malformed (10.3).
+    confirmed = {e.confirms for e in evidence if e.status == "verified" and e.confirms
+                 and not (e.check == "C5_geo" and bad_bank)}
     facts = {"who": "who" in confirmed or vendor_known, "channel": "channel" in confirmed, "money": "money" in confirmed}
     n = sum(facts.values())
     return ("HIGH" if n == 3 else "MEDIUM" if n == 2 else "LOW"), facts

@@ -81,6 +81,63 @@ def api_onboard(body: dict) -> dict:
     return {"decision": decision, "markdown": md, **extras}
 
 
+def api_guard(body: dict) -> dict:
+    """Pre-payment check for ANY AI payment agent over plain HTTP: allow or deny, with reasons."""
+    raw = str(body.get("raw_text") or "")[:MAX_BODY]
+    g = _graph()
+    try:
+        v, _ = verify(raw, client=CLIENT, graph=g)
+    finally:
+        g.close()
+    reasons = [e.detail for e in sorted((e for e in v.evidence if e.status == "contradicted"),
+                                        key=lambda e: (not e.hard_block, -e.weight))][:3]
+    return {"allow": v.decision == "PAY", "decision": v.decision, "case_id": v.case_id, "risk": v.risk_score,
+            "attack": v.hypothesis.attack_type if v.hypothesis else "none", "rule": v.decision_rule,
+            "reasons": reasons, "pay_with": "/api/pay" if v.decision == "PAY" else None,
+            "next_step": {"PAY": "Payment may be released through the gate.",
+                          "HOLD": "Do not pay: a human must call the vendor on its independently sourced contact.",
+                          "BLOCK": "Do not pay: fraud case file generated."}[v.decision]}
+
+
+def api_stats(_body: dict | None = None) -> dict:
+    g = _graph()
+    try:
+        cases = [c for c in g.all_cases() if not c["case_id"].startswith("seed")]
+    finally:
+        g.close()
+    from payeeguard.scoring import to_usd
+    by = {"PAY": 0, "HOLD": 0, "BLOCK": 0}
+    stopped = paid = 0.0
+    ms = []
+    for c in cases:
+        d = c["data"]
+        by[c["decision"]] = by.get(c["decision"], 0) + 1
+        usd = to_usd(d.get("amount"), d.get("currency")) or 0.0
+        if c["state"] in ("BLOCK", "HOLD"):
+            stopped += usd
+        if c["state"] == "PAID_SIMULATED":
+            paid += usd
+        if d.get("ms") is not None:
+            ms.append(d["ms"])
+    return {"cases": len(cases), "by_decision": by, "stopped_usd": round(stopped, 2), "paid_usd": round(paid, 2),
+            "avg_ms": round(sum(ms) / len(ms)) if ms else None, "credits": round(CLIENT.credits, 1),
+            "live_calls": CLIENT.calls}
+
+
+def api_screen(body: dict) -> dict:
+    from payeeguard.screening import parse_csv, screen
+    text = body.get("csv") if body.get("csv") else (SAMPLES / "vendor_master.csv").read_text(encoding="utf-8")
+    rows = parse_csv(str(text)[:MAX_BODY])
+    if not rows:
+        return {"error_msg": "No vendor rows found. Expected a header: name,domain,iban,account,swift,ifsc,country",
+                "vendors": [], "counts": {}, "total": 0}
+    g = _graph()
+    try:
+        return screen(rows[:200], CLIENT, g)
+    finally:
+        g.close()
+
+
 def api_gate(kind: str, body: dict) -> dict:
     g = _graph()
     try:
@@ -119,6 +176,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path == "/api/samples":
             return self._json(200, samples())
+        if path == "/api/stats":
+            return self._json(200, api_stats())
         if path.startswith("/api/case/"):
             g = _graph()
             try:
@@ -144,7 +203,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": "invalid JSON"})
         if not isinstance(body, dict):
             return self._json(400, {"error": "JSON object expected"})
-        routes = {"/api/verify": api_verify, "/api/onboard": api_onboard,
+        routes = {"/api/verify": api_verify, "/api/onboard": api_onboard, "/api/guard": api_guard,
+                  "/api/screen": api_screen,
                   "/api/pay": lambda b: api_gate("pay", b), "/api/resolve": lambda b: api_gate("resolve", b)}
         if self.path == "/api/reset":
             with LOCK:

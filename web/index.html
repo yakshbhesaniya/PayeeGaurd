@@ -30,12 +30,21 @@
   </div>
 </header>
 
+<section class="impact" id="impact" aria-label="Impact so far">
+  <div><b id="stStopped">$0</b><span>held or blocked</span></div>
+  <div><b id="stCases">0</b><span>requests investigated</span></div>
+  <div class="split"><b><i class="pay" id="stPay">0</i> / <i class="hold" id="stHold">0</i> / <i class="block" id="stBlock">0</i></b><span>pay / hold / block</span></div>
+  <div><b id="stMs">—</b><span>per decision</span></div>
+  <div><b id="stCredits">0</b><span>Crustdata credits used</span></div>
+</section>
+
 <main class="desk">
   <aside class="tray">
     <nav class="tabs" role="tablist">
       <button role="tab" class="tab on" data-tab="inbox">Inbox</button>
       <button role="tab" class="tab" data-tab="paste">Paste email</button>
       <button role="tab" class="tab" data-tab="onboard">New vendor</button>
+      <button role="tab" class="tab" data-tab="master">Vendor list</button>
     </nav>
 
     <section class="pane on" id="pane-inbox">
@@ -63,6 +72,15 @@
       </form>
       <p class="hint small">Try one:</p>
       <ul class="examples" id="onbExamples"></ul>
+    </section>
+
+    <section class="pane" id="pane-master">
+      <p class="hint">Audit your whole vendor master at once: shared bank accounts, duplicate vendors, lookalike
+        domains, accounts used in past attacks.</p>
+      <button class="btn ink" id="screenSample">Screen the sample vendor list (7 vendors)</button>
+      <p class="hint small">Or paste your CSV (name,domain,iban,account,swift,ifsc,country):</p>
+      <textarea id="csvBox" class="short" spellcheck="false" placeholder="name,domain,iban,account,swift,ifsc,country&#10;Acme Ltd,acme.com,,12345678,,HDFC0000001,IN"></textarea>
+      <button class="btn" id="screenCsv">Screen this list</button>
     </section>
   </aside>
 

@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import time
 from dataclasses import asdict
 from datetime import datetime
 
@@ -57,6 +58,7 @@ def _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0, 
     inv, x1 = cross_check(inv, llm_fields)
     case_id = case_id_for(raw_text or "")
     ctx = {"client": client, "graph": graph, "meta": meta, "case_id": case_id, "display_name": meta.display_name,
+           "t0": time.perf_counter(),
            "received_at": datetime.now().strftime("%Y-%m-%d %H:%M"), "version": __version__}
     if meta.empty:
         return _early(case_id, "No content to verify.", inv, ctx)
@@ -64,6 +66,10 @@ def _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0, 
         return _early(case_id, "No payment request detected (no amount, invoice or bank details).", inv, ctx)
 
     evidence = list(x1)
+    if meta.currency_assumed and inv.currency == "USD":
+        evidence.append(ev("X3_currency_assumed", "CONTEXT", "Currency stated explicitly", "verified",
+                           "Currency assumed USD from a bare '$' (could be SGD, AUD, CAD...): confirm on callback",
+                           "extract:regex#currency"))
     if meta.amount_conflict:
         totals = ", ".join(f"{c} {a:,.2f}" for a, c, lab in meta.amounts if lab)
         evidence.append(ev("X2_amount_conflict", "INTEGRITY", "Amounts in the email agree", "contradicted",
@@ -187,11 +193,16 @@ def _write_graph(v: Verdict, inv, ctx, graph: Graph, hyp, s) -> None:
             "invoice_number": inv.invoice_number, "amount": inv.amount, "currency": inv.currency,
             "sender_domain": geo.email_domain(inv.sender_email), "sender_node": sender_node,
             "fp": asdict(fp) if fp else None, "rule": v.decision_rule, "risk": v.risk_score,
-            "attack": hyp.attack_type if hyp else "none",
+            "attack": hyp.attack_type if hyp else "none", "ms": round((time.perf_counter() - ctx["t0"]) * 1000),
+            "credits": v.crustdata_credits,
             "top_reason": next((e.detail for e in sorted((e for e in v.evidence if e.status == "contradicted"),
                                                          key=lambda e: (not e.hard_block, -e.weight))), v.decision_rule)}
     old = graph.get_case(case_id)
-    if old and old["state"] in ("APPROVED", "PAID_SIMULATED"):
+    if old and old["state"] == "APPROVED" and v.decision == "BLOCK":
+        data["approvals"] = old["data"].get("approvals", [])
+        data["voided"] = "approval voided: new hard evidence on re-verification"
+        graph.save_case(case_id, v.decision, "BLOCK", data)          # a new BLOCK voids an earlier human approval
+    elif old and old["state"] in ("APPROVED", "PAID_SIMULATED"):
         data["approvals"] = old["data"].get("approvals", [])
         graph.save_case(case_id, v.decision, old["state"], data)    # keep human decisions on re-run
     else:

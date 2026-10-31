@@ -51,8 +51,8 @@ class Fingerprint:
 
 class Graph:
     def __init__(self, path: Path | None = None):
-        secret = config.env("PAYEEGUARD_FP_SECRET")
-        if not secret:  # edge case G-11: refuse an insecure default
+        secret = config.env("PAYEEGUARD_FP_SECRET").strip()
+        if not secret:  # edge case G-11: refuse an insecure default (whitespace counts as missing)
             raise RuntimeError("PAYEEGUARD_FP_SECRET missing in .env (generate with: openssl rand -hex 32)")
         self._secret = secret.encode()
         self.path = path or config.data_dir() / "graph.db"
@@ -72,12 +72,19 @@ class Graph:
     def fingerprint(self, iban=None, account=None, code=None, last4=None) -> Fingerprint | None:
         strong_key = None
         country = None
+        code = normalise_code(code)
         if iban:
             n = geo.iban_normalise(iban)
             strong_key, country, last4 = "IBAN:" + n, n[:2], n[-4:]
         elif account and code:
             digits = re.sub(r"\D", "", account)
-            strong_key, last4 = f"{code.upper()}:{digits}", digits[-4:]
+            strong_key, last4 = f"{code}:{digits}", digits[-4:]
+        elif account:
+            # Full account number but no bank code: can't be a strong identity (could exist at another bank), but it is
+            # definitely a specific account, so it never matches history implicitly -> G1 sees a NEW account.
+            digits = re.sub(r"\D", "", account)
+            if len(digits) >= 6:
+                return Fingerprint("account:nocode:" + self._h(digits), None, False, None, digits[-4:])
         if code:
             country = country or ("IN" if geo.is_ifsc(code) else geo.swift_country(code))
         weak_code = (code or (iban[:2] if iban else "") or "").upper()
@@ -174,7 +181,8 @@ class Graph:
     def invoice_paid(self, company: str, invoice_no: str, exclude_case: str = ""):
         return self.db.execute(
             "SELECT p.*, a.weak FROM payments p LEFT JOIN accounts a ON a.id=p.account "
-            "WHERE p.company=? AND p.invoice_no=? AND p.case_id!=? LIMIT 1", (company, invoice_no, exclude_case)
+            "WHERE p.company=? AND UPPER(p.invoice_no)=UPPER(?) AND p.case_id!=? LIMIT 1",
+            (company, invoice_no.strip(), exclude_case)
         ).fetchone()
 
     def payments_for(self, company: str, exclude_case: str = "") -> list[sqlite3.Row]:
@@ -201,6 +209,10 @@ class Graph:
         d["data"] = json.loads(d["data"] or "{}")
         return d
 
+    def all_cases(self) -> list[dict]:
+        rows = self.db.execute("SELECT * FROM cases ORDER BY created_at").fetchall()
+        return [{**dict(r), "data": json.loads(r["data"] or "{}")} for r in rows]
+
     def set_state(self, case_id: str, state: str, data: dict | None = None) -> None:
         if data is not None:
             self.db.execute("UPDATE cases SET state=?, data=?, updated_at=? WHERE case_id=?",
@@ -208,6 +220,16 @@ class Graph:
         else:
             self.db.execute("UPDATE cases SET state=?, updated_at=? WHERE case_id=?", (state, now(), case_id))
         self.db.commit()
+
+
+def normalise_code(code: str | None) -> str | None:
+    """SWIFT 'CHASUS33XXX' (primary office) == 'CHASUS33'; IFSC unchanged; uppercase, no spaces."""
+    if not code:
+        return None
+    c = re.sub(r"\s", "", code).upper()
+    if len(c) == 11 and c.endswith("XXX") and not geo.is_ifsc(c):
+        c = c[:8]
+    return c
 
 
 def company_node(cid: int | None = None, domain: str | None = None) -> str | None:
@@ -225,8 +247,13 @@ def seed(graph: Graph, client, path: Path | None = None) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     cite = f"seed:{path.relative_to(config.ROOT).as_posix()}"
     lines = []
+    from .client import OfflineMiss
     for v in data["vendors"]:
-        best, _ = first_match(identify(client, domain=v["domain"]))
+        try:
+            best, _ = first_match(identify(client, domain=v["domain"]))
+        except OfflineMiss as e:   # edge case G-9: say what is missing and how to fix it
+            raise RuntimeError(f"seed: cannot resolve {v['domain']}: offline and not in the cache. Run `python cli.py "
+                               "seed` once online, or copy a filled .cache folder.") from e
         if not best:
             raise RuntimeError(f"seed: {v['domain']} did not resolve in Crustdata")
         cd = best["company_data"]

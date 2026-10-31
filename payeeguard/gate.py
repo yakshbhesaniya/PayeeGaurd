@@ -42,6 +42,14 @@ def pay_invoice(case_id: str, graph: Graph, client=None) -> str:
         return (f"Refused: USD {usd:,.0f} is above the dual-approval limit ({limit:,}); "
                 f"{len(approvers)} of 2 different reviewers have approved.")
     fp = _fp(d)
+    overridden = any(a["decision"] == "override" for a in d.get("approvals", []))
+    if fp and fp.strong and not overridden:
+        # Re-check at payment time: the account may have been used in an attack AFTER this case was approved.
+        flagged = graph.cases_flagged(fp.id, case_id)
+        if flagged:
+            audit.append("pay_refused", case_id=case_id, state=case["state"], reason="account flagged after approval")
+            return (f"Refused: account {fp.masked} was used in blocked case {flagged[0]['case_id']} after this case was "
+                    "approved. Re-verify before paying.")
     graph.record_payment(case_id, d["company_node"], d.get("invoice_number") or case_id, d.get("amount"),
                          d.get("currency"), fp, date.today().isoformat(), f"gate:pay_invoice@case:{case_id}",
                          d.get("sender_domain"))
@@ -62,9 +70,22 @@ def resolve_case(case_id: str, decision: str, reviewer: str, note: str, graph: G
         return f"Unknown case `{case_id}`."
     if decision not in ("approve", "reject", "override"):
         return "decision must be approve, reject or override"
+    reviewer, note = (reviewer or "").strip(), (note or "").strip()
     if not reviewer or not note:
         return "reviewer and note are required (they go into the audit log)"
     d, state = case["data"], case["state"]
+    usd = to_usd(d.get("amount"), d.get("currency"))
+    needs_dual = usd is not None and usd > config.policy()["decision"]["dual_approval_above_usd"]
+    if state == "PAY" and decision == "approve" and needs_dual:
+        # A high-value PAY still needs two different approvers before the gate releases it.
+        approvals = d.setdefault("approvals", [])
+        if any(a["reviewer"] == reviewer and a["decision"] == "approve" for a in approvals):
+            return f"{reviewer} already approved this case; the second approval needs a different reviewer."
+        approvals.append({"reviewer": reviewer, "decision": "approve", "note": note})
+        graph.set_state(case_id, "PAY", d)
+        audit.append("resolved", case_id=case_id, decision="approve", reviewer=reviewer, note=note)
+        n = len({a["reviewer"] for a in approvals if a["decision"] == "approve"})
+        return f"Approval recorded for high-value case `{case_id}` ({n} of 2 different reviewers)."
     if state in ("PAY", "PAID_SIMULATED"):
         return f"Case `{case_id}` is {state}: nothing to resolve."             # P3
     if decision == "override" and state != "BLOCK":

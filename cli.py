@@ -175,6 +175,8 @@ def main(argv=None) -> int:
     e.add_argument("--save", action="store_true", help="also write reports for each sample")
     sub.add_parser("audit")
     sub.add_parser("ablate", help="which check decides each sample's verdict")
+    sc = sub.add_parser("screen", help="screen a whole vendor master CSV")
+    sc.add_argument("csv", nargs="?", default=str(config.ROOT / "samples" / "vendor_master.csv"))
     sub.add_parser("stress", help="metamorphic rewrites of every sample must keep the same verdict")
     a = p.parse_args(argv)
 
@@ -198,6 +200,14 @@ def main(argv=None) -> int:
             print(json.dumps({"decision": verdict.decision, "case_id": verdict.case_id}) if a.json else md)
         elif a.cmd == "pay":
             print(gate.pay_invoice(a.case_id, graph, CrustdataClient()))
+        elif a.cmd == "screen":
+            from payeeguard.screening import parse_csv, screen
+            r = screen(parse_csv(Path(a.csv).read_text(encoding="utf-8")), CrustdataClient(), graph)
+            for v in r["vendors"]:
+                print(f"{v['status']:6} row {v['row']:>2} {v['name'][:28]:28} {v['domain'] or '-':28}")
+                for f in v["findings"]:
+                    print(f"         {f['level']:6} {f['text']}")
+            print(f"\n{r['total']} vendors: {r['counts']} · ≈{r['credits_estimate']} credits")
         elif a.cmd == "status":
             print(gate.case_status(a.case_id, graph))
         elif a.cmd == "resolve":

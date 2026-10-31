@@ -1,0 +1,8 @@
+name,domain,iban,account,swift,ifsc,country
+Freshworks Inc,freshworks.com,,000123456789,CHASUS33,,US
+Zoho Corporation,zoho.com,,50200012345678,,HDFC0000001,IN
+Razorpay Software,razorpay.com,,918020012345,,UTIB0000123,IN
+Fresh Works Billing Ltd,freshworks.com,,778899001122,,ICIC0000456,IN
+Freshworks Payments,freshworks-payments.com,GB82WEST12345698765432,,WESTGB2L,,GB
+Acme Traders,acme-traders-india.co.in,,50200012345678,,HDFC0000001,IN
+Zentrix Global Solutions,zentrixglobal.example,,123405000789,,ICIC0001234,IN

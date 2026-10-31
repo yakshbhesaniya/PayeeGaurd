@@ -155,7 +155,7 @@ function renderCase(data) {
 
   <section class="sec"><h3><span>Finished work</span><span>${v.actions.length} documents</span></h3>
     <div class="docs"><ul class="doclist">${v.actions.map((a, i) => `<li data-i="${i}" class="${i ? "" : "on"}"><small>${esc(a.kind.replace(/_/g, " "))}</small>${esc(a.title)}</li>`).join("")}</ul>
-    <div class="doc" id="docBody">${esc(stripBanner(v.actions[0]?.body || ""))}</div></div>
+    <div class="doc" id="docBody">${md(v.actions[0]?.body || "")}</div></div>
   </section>
 
   <section class="sec"><h3><span>Payment gate</span><span class="statepill" id="statePill">${esc(data.state)}</span></h3>
@@ -177,7 +177,7 @@ function renderCase(data) {
   $("#showVerified").addEventListener("change", (e) => document.querySelectorAll(".ledger tr.na").forEach((tr) => (tr.hidden = !e.target.checked)));
   document.querySelectorAll(".doclist li").forEach((li) => li.addEventListener("click", () => {
     document.querySelectorAll(".doclist li").forEach((x) => x.classList.toggle("on", x === li));
-    $("#docBody").textContent = stripBanner(v.actions[+li.dataset.i].body);
+    $("#docBody").innerHTML = md(v.actions[+li.dataset.i].body);
   }));
   $("#payBtn").addEventListener("click", () => gateCall("/api/pay", { case_id: v.case_id }));
   document.querySelectorAll("[data-dec]").forEach((b) => b.addEventListener("click", () => {
@@ -206,6 +206,42 @@ function type(el, text) {
 }
 
 const stripBanner = (s) => s.replace(/^> SIMULATED \/ DRAFT[^\n]*\n\n/, "");
+
+/* Tiny, safe Markdown -> HTML for the finished-work documents. Everything is escaped FIRST, so text from an email
+   can never inject markup; only our own patterns (headings, bold, code, lists, tables, citations) become HTML. */
+function md(src) {
+  const inline = (t) => esc(t)
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[((?:graph|crustdata|extract|dns|rdap|policy|seed|ledger|vendor_master)[^\]]*)\]/g, '<span class="cite">$1</span>');
+  const lines = stripBanner(String(src || "")).split("\n");
+  let out = "", list = null;
+  const close = () => { if (list) { out += `</${list}>`; list = null; } };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*\|/.test(l)) {                                   // table block
+      close();
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) {
+        if (!/^\s*\|[\s:|-]+\|\s*$/.test(lines[i])) rows.push(lines[i].trim().replace(/^\||\|$/g, "").split("|"));
+        i++;
+      }
+      i--;
+      out += `<table class="mdtable">${rows.map((r, k) => `<tr>${r.map((c) => `<${k ? "td" : "th"}>${inline(c.trim())}</${k ? "td" : "th"}>`).join("")}</tr>`).join("")}</table>`;
+      continue;
+    }
+    let m;
+    if ((m = l.match(/^#\s+(.*)/))) { close(); out += `<h4 class="mdh1">${inline(m[1])}</h4>`; }
+    else if ((m = l.match(/^#{2,3}\s+(.*)/))) { close(); out += `<h5 class="mdh2">${inline(m[1])}</h5>`; }
+    else if ((m = l.match(/^\s*[-•]\s+(.*)/))) { if (list !== "ul") { close(); out += "<ul>"; list = "ul"; } out += `<li>${inline(m[1])}</li>`; }
+    else if ((m = l.match(/^\s*\d+\.\s+(.*)/))) { if (list !== "ol") { close(); out += "<ol>"; list = "ol"; } out += `<li>${inline(m[1])}</li>`; }
+    else if ((m = l.match(/^>\s?(.*)/))) { close(); out += `<blockquote>${inline(m[1])}</blockquote>`; }
+    else if (!l.trim()) { close(); }
+    else { close(); out += `<p>${inline(l)}</p>`; }
+  }
+  close();
+  return out;
+}
 // "Freshworks (crustdata_company_id 6042422)" -> ["Freshworks", "crustdata_company_id 6042422"]
 const splitLabel = (s) => { const m = String(s).match(/^(.*?)\s*\((crustdata_company_id \d+)\)$/); return m ? [m[1], m[2]] : [String(s), ""]; };
 const narr = (s) => esc(s).replace(/\[([^\]]+)\]/g, '<span class="src">[$1]</span>');
@@ -277,6 +313,53 @@ function renderOnboarding(r, req) {
   </section>`;
   if (d === "REJECT") $(".stampbox").classList.add("shake");
 }
+
+/* ---------- impact strip ---------- */
+const usd = (n) => "$" + Math.round(n || 0).toLocaleString("en-US");
+let lastStats = {};
+async function refreshStats() {
+  try {
+    const s = await api("/api/stats");
+    const set = (id, val) => { const el = $(id); if (el && el.textContent !== String(val)) { el.textContent = val; el.closest("b")?.classList.remove("bump"); void el.offsetWidth; el.closest("b")?.classList.add("bump"); } };
+    set("#stStopped", usd(s.stopped_usd));
+    set("#stCases", s.cases);
+    set("#stPay", s.by_decision.PAY || 0); set("#stHold", s.by_decision.HOLD || 0); set("#stBlock", s.by_decision.BLOCK || 0);
+    set("#stMs", s.avg_ms == null ? "—" : s.avg_ms < 1000 ? `${s.avg_ms} ms` : `${(s.avg_ms / 1000).toFixed(1)} s`);
+    set("#stCredits", s.credits);
+    lastStats = s;
+  } catch { /* the strip is decorative; never block the desk */ }
+}
+
+/* ---------- vendor list screening ---------- */
+async function screenList(csv) {
+  running(["Resolving every vendor domain in Crustdata", "Enriching companies in batches of 25", "Cross-checking bank accounts across vendors", "Looking for duplicates and lookalike domains"], "Auditing the vendor list…");
+  try {
+    const r = await api("/api/screen", csv ? { csv } : {});
+    stopRunning();
+    if (r.error_msg) { $("#caseView").innerHTML = `<p class="err">${esc(r.error_msg)}</p>`; return; }
+    const c = r.counts || {};
+    $("#caseView").innerHTML = `
+      <div class="case-top"><div class="stampbox"><div class="stamp ${c.ALERT ? "BLOCK" : c.REVIEW ? "HOLD" : "PAY"}">${c.ALERT ? "Alerts" : c.REVIEW ? "Review" : "Clean"}<small>vendor master audit</small></div></div>
+        <div class="meta"><p class="kicker">Vendor master · ${r.total} vendors</p><h2>${c.ALERT || 0} alerts, ${c.REVIEW || 0} to review</h2>
+          <div class="sub">≈${esc(r.credits_estimate)} Crustdata credits · cross-vendor patterns no single invoice check can see</div>
+          <div class="vm-sum">${["ALERT", "REVIEW", "OK"].map((k) => `<span class="${k}">${c[k] || 0} ${k}</span>`).join("")}</div></div></div>
+      <section class="sec"><h3><span>Findings</span><span>sorted by severity</span></h3>
+        <div class="tablewrap"><table class="ledger"><thead><tr><th>Row</th><th>Vendor</th><th>Status</th><th>Findings and sources</th></tr></thead><tbody>
+        ${[...r.vendors].sort((a, b) => ({ ALERT: 0, REVIEW: 1, OK: 2 }[a.status] - { ALERT: 0, REVIEW: 1, OK: 2 }[b.status]) || a.row - b.row).map((v, i) => `
+          <tr style="animation-delay:${i * 40}ms"><td class="chk">${v.row}</td>
+          <td class="det"><b>${esc(v.name)}</b><span class="fam">${esc(v.domain || "no domain")}${v.account ? " · " + esc(v.account) : ""}${v.company_id ? " · id " + esc(v.company_id) : ""}</span></td>
+          <td><span class="vstat ${v.status}">${v.status}</span></td>
+          <td><ul class="vfind">${v.findings.map((f) => `<li class="${f.level}">${esc(f.text)}<small>${esc(f.source)}</small></li>`).join("")}</ul></td></tr>`).join("")}
+        </tbody></table></div>
+        ${r.errors?.length ? `<p class="banner">Some lookups failed and were treated as unknown, not fraud: ${esc(r.errors.join("; "))}</p>` : ""}
+      </section>`;
+    refreshStats();
+  } catch (err) { fail(err); }
+}
+$("#screenSample").addEventListener("click", () => screenList(null));
+$("#screenCsv").addEventListener("click", () => { const t = $("#csvBox").value.trim(); if (t) screenList(t); });
+
+refreshStats();
 
 api("/api/samples").then((s) => {
   samples = s; renderInbox();

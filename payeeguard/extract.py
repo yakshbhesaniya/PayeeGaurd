@@ -60,7 +60,9 @@ def _clean(raw: str) -> str:
     if re.search(r"<(html|body|div|p|br|table)\b", t, re.IGNORECASE):
         t = re.sub(r"<br\s*/?>|</p>|</div>|</tr>", "\n", t, flags=re.IGNORECASE)
         t = re.sub(r"<[^>]+>", " ", t)
-    return html.unescape(t).replace("\r\n", "\n")
+    t = html.unescape(t).replace("\r\n", "\n")
+    # Leading spaces (e.g. "<p>From:" -> " From:") must not hide headers from the ^From: patterns (edge case E5).
+    return "\n".join(line.lstrip(" \t ") for line in t.split("\n"))
 
 
 def normalise_email(e: str | None) -> str | None:
@@ -105,7 +107,9 @@ def _sender_block(text: str) -> tuple[str, bool]:
         return text[markers[-1].end():], True
     top_from = _header(text, "From") or ""
     if buyer and buyer.lower() in top_from.lower():
-        return text, True
+        # A colleague at our own company forwarded it without a marker: the real sender is the NEXT From: header.
+        froms = list(re.finditer(r"^From:", text, re.IGNORECASE | re.MULTILINE))
+        return (text[froms[1].start():] if len(froms) > 1 else text), True
     return text, False
 
 
@@ -138,7 +142,8 @@ def parse_number(s: str) -> float | None:
         return None
 
 
-NUM = r"\d[\d,.  ]*\d(?:\s*(?:lakhs?|lacs?|crores?))?|\d"
+# Bounded repetition: real amounts are short; an unbounded run made "1,1,1,..." take seconds (ReDoS).
+NUM = r"\d(?:[\d,.  ]{0,24}\d)?(?:\s*(?:lakhs?|lacs?|crores?))?"
 MONEY_RE = re.compile(
     rf"(?P<pre>{CURRENCY_CODES}|Rs\.?|₹|\$|€|£)\s?(?P<n1>{NUM})(?:\s*/-)?"
     rf"|(?P<n2>{NUM})\s?(?P<post>{CURRENCY_CODES}|€|£)(?![A-Za-z])", re.IGNORECASE)
@@ -160,6 +165,8 @@ def _amounts(text: str) -> tuple[list[tuple[float, str, bool]], bool]:
             cur = CURRENCY_SYMBOLS[cur_raw]
             assumed = assumed or cur_raw == "$"
         window = text[max(0, m.start() - 40): m.start()].lower()
+        if re.search(r"[-−(]\s?$", text[max(0, m.start() - 2): m.start()]):
+            val = -val                                     # "-USD 300.00" / "(USD 300)" is a credit, never a payment
         labelled = bool(re.search(r"total|amount due|balance due|invoice[^\n]{0,30}for|pay\b|remit", window))
         found.append((round(val, 2), cur, labelled))
     return found, assumed
@@ -275,9 +282,9 @@ def extract(raw_text: str) -> tuple[Invoice, ExtractMeta]:
         or ("IN" if geo.is_ifsc(code) else geo.swift_country(code) if code else None) or meta.stated_country
     urgency = any(p in low for p in config.policy()["tactics"].get("urgency", []))
     inv_no = None
-    m = re.search(r"\b([A-Z]{2,5}-\d{4}-\d{3,5}|[A-Z]{2,5}-\d{4,6})\b", (subject or "") + "\n" + body)
+    m = re.search(r"\b([A-Z]{2,5}-\d{4}-\d{3,5}|[A-Z]{2,5}-\d{4,6})\b", (subject or "") + "\n" + body, re.IGNORECASE)
     if m:
-        inv_no = m.group(1)
+        inv_no = m.group(1).upper()                         # "inv-2026-1031" is the same invoice as INV-2026-1031
     if not meta.amounts and not inv_no and not accounts and not re.search(r"invoice|payment|remit|bank", low):
         meta.not_payment = True
 
@@ -327,8 +334,19 @@ def cross_check(inv: Invoice, llm_fields: dict | None) -> tuple[Invoice, list[Ev
                         f"Claude passed {key}={_mask(key, val)!s}, which does not appear anywhere in the email; ignored",
                         f"extract:llm#{key} not grounded in raw_text", 10))
         elif mine in (None, "", False):
+            # Identity fields decide WHICH company we verify against, so they must be grounded too: otherwise Claude
+            # could swap the vendor (e.g. claim freshworks.com for a Zoho lookalike) and soften a BLOCK.
+            if key in IDENTITY and not (isinstance(val, str) and val.strip().lower() in (inv.raw_text or "").lower()):
+                evidence.append(Evidence(
+                    "X1_extraction", "INTEGRITY", f"Claude's {key} appears in the email text", "contradicted",
+                    f"Claude passed {key}={val!s}, which does not appear anywhere in the email; ignored",
+                    f"extract:llm#{key} not grounded in raw_text", 10))
+                continue
             setattr(inv, key, val)
     return inv, evidence
+
+
+IDENTITY = ("vendor_domain", "vendor_name")
 
 
 def grounded(key: str, value, raw_text: str) -> bool:
@@ -346,7 +364,7 @@ def grounded(key: str, value, raw_text: str) -> bool:
             target = round(float(value), 2)
         except (TypeError, ValueError):
             return False
-        nums = [parse_number(m.group(0)) for m in re.finditer(r"\d[\d,.  ]*\d(?:\s*(?:lakhs?|lacs?|crores?))?|\d", raw)]
+        nums = [parse_number(m.group(0)) for m in re.finditer(NUM, raw)]
         return any(n is not None and abs(n - target) < 0.01 for n in nums)
     compact = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
     v = re.sub(r"[^A-Za-z0-9]", "", str(value)).upper()
