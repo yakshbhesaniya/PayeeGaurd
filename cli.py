@@ -65,6 +65,90 @@ def cmd_eval(args) -> int:
     return 0 if ok == len(rows) else 1
 
 
+def _fresh_eval_graph(client) -> Graph:
+    db = config.data_dir() / "eval_graph.db"
+    for suffix in ("", "-wal", "-shm"):
+        Path(str(db) + suffix).unlink(missing_ok=True)
+    g = Graph(db)
+    seed(g, client)
+    return g
+
+
+def _invoice_samples():
+    samples = config.ROOT / "samples"
+    expected = json.loads((samples / "expected.json").read_text(encoding="utf-8"))
+    return samples, [(n, e) for n, e in expected.items() if not n.startswith("_")]
+
+
+def cmd_ablate(args) -> int:
+    """For each sample: which single check, if removed, would change the decision?"""
+    from payeeguard.ablation import ablate
+    from payeeguard.extract import extract
+
+    client = CrustdataClient()
+    graph = _fresh_eval_graph(client)
+    samples, items = _invoice_samples()
+    print(f"{'sample':32} {'verdict':7}  decisive checks (decision if removed)")
+    for name, exp in items:
+        if exp.get("env"):
+            continue
+        raw = (samples / name).read_text(encoding="utf-8")
+        extras: dict = {}
+        v, _ = verify(raw, client=client, graph=graph, save=False, extras=extras)
+        inv, meta = extract(raw)
+        known = any(e.check == "G1_account_history" and e.unchecked_reason != "not_applicable" for e in v.evidence)
+        flips = [f"{c}→{d}" for c, d, a in ablate(v, inv, known, meta.credit_note) if d != v.decision]
+        print(f"{name[:32]:32} {v.decision:7}  {', '.join(flips) or '(no single check decides: verdict is robust)'}")
+    graph.close()
+    return 0
+
+
+def _variants(raw: str) -> dict[str, str]:
+    """Rewrites that must NOT change the verdict (metamorphic testing)."""
+    head, _, body = raw.partition("\n\n")
+    return {
+        "crlf": raw.replace("\n", "\r\n"),
+        "html": "<html><body><p>" + raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\n", "<br>") + "</p></body></html>",
+        "forwarded_by_colleague": "From: AP Clerk <clerk@ourco.example>\nSubject: Fwd: please check\n\nCan you verify this?\n\n"
+                                  "---------- Forwarded message ---------\n" + raw,
+        "quoted_history": raw + "\n\nOn Mon, 2 Oct 2026 Someone wrote:\n> Please pay USD 99,999 to IBAN DE89 3704 0044 0532 0130 00\n",
+        "extra_whitespace": raw.replace("\n", "\n\n").replace(": ", ":   "),
+        "trailing_noise": raw + "\n\n--\nSent from my phone. This email and any attachments are confidential.\n",
+    }
+
+
+def cmd_stress(args) -> int:
+    client = CrustdataClient()
+    samples, items = _invoice_samples()
+    items = [(n, e) for n, e in items if not e.get("env")]
+    raws = [(samples / n).read_text(encoding="utf-8") for n, _ in items]
+
+    def run_after(i: int, text: str):
+        """Fresh graph, replay samples 0..i-1 (same history the original saw), then verify text."""
+        g = _fresh_eval_graph(client)
+        try:
+            for earlier in raws[:i]:
+                verify(earlier, client=client, graph=g, save=False)
+            v, _ = verify(text, client=client, graph=g, save=False)
+            return v.decision, (v.hypothesis.attack_type if v.hypothesis else "none"), v.decision_rule
+        finally:
+            g.close()
+
+    fails, total = [], 0
+    for i, (name, _) in enumerate(items):
+        base = run_after(i, raws[i])
+        for vname, text in _variants(raws[i]).items():
+            total += 1
+            got = run_after(i, text)
+            if got[:2] != base[:2]:
+                fails.append(f"{name} [{vname}]: {base[0]}/{base[1]} -> {got[0]}/{got[1]} ({got[2]})")
+    for f in fails:
+        print("❌", f)
+    print(f"\n{total - len(fails)}/{total} variants kept the same verdict and attack type")
+    return 0 if not fails else 1
+
+
 def main(argv=None) -> int:
     config.setup_logging()
     p = argparse.ArgumentParser(prog="payeeguard", description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
@@ -90,10 +174,16 @@ def main(argv=None) -> int:
     e = sub.add_parser("eval")
     e.add_argument("--save", action="store_true", help="also write reports for each sample")
     sub.add_parser("audit")
+    sub.add_parser("ablate", help="which check decides each sample's verdict")
+    sub.add_parser("stress", help="metamorphic rewrites of every sample must keep the same verdict")
     a = p.parse_args(argv)
 
     if a.cmd == "eval":
         return cmd_eval(a)
+    if a.cmd == "ablate":
+        return cmd_ablate(a)
+    if a.cmd == "stress":
+        return cmd_stress(a)
     if a.cmd == "audit":
         ok, msg = audit.verify()
         print(msg)
