@@ -233,6 +233,9 @@ def poll_inbox_forever(every: int = 20) -> None:
                 if m["message_id"] in seen:
                     continue
                 seen.add(m["message_id"])
+                _inv, meta = extract(m["raw"])
+                if meta.empty or meta.not_payment:
+                    continue                      # ordinary personal mail: never verified, never stored
                 with LOCK:
                     r = api_verify({"raw_text": m["raw"]})
                 v = r["verdict"]

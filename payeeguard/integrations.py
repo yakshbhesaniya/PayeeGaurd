@@ -178,20 +178,33 @@ def _to_text(msg) -> str:
     return body
 
 
+_BASELINE: list[int] = []     # highest mailbox UID when the watcher started: older mail is never read
+
+
 def fetch_unseen(limit: int = 10) -> list[dict]:
-    """Fetch unread messages, mark them read, and return raw-text emails ready for verify()."""
+    """Return NEW messages (arrived after the watcher started) as raw-text emails ready for verify().
+
+    Privacy for personal mailboxes: mail that was already there is never fetched, nothing is marked as read
+    (BODY.PEEK), and the caller drops messages that aren't payment requests.
+    """
     if not status()["inbox"]:
         return []
     out = []
     with imaplib.IMAP4_SSL(_env("IMAP_HOST"), int(_env("IMAP_PORT") or "993")) as im:
         im.login(_env("IMAP_USER"), _env("IMAP_PASSWORD"))
-        im.select(_env("IMAP_FOLDER") or "INBOX")
-        typ, data = im.search(None, "UNSEEN")
-        ids = (data[0].split() if typ == "OK" and data and data[0] else [])[-limit:]
-        for mid in ids:
-            typ, parts = im.fetch(mid, "(RFC822)")
+        im.select(_env("IMAP_FOLDER") or "INBOX", readonly=True)
+        typ, data = im.uid("search", None, "ALL")
+        uids = [int(u) for u in (data[0].split() if typ == "OK" and data and data[0] else [])]
+        if not _BASELINE:
+            _BASELINE.append(max(uids) if uids else 0)
+            return []                                   # first poll only records where "new" starts
+        new = [u for u in uids if u > _BASELINE[0]][-limit:]
+        for uid in new:
+            typ, parts = im.uid("fetch", str(uid), "(BODY.PEEK[])")
             if typ != "OK" or not parts or not isinstance(parts[0], tuple):
                 continue
+            _BASELINE[0] = max(_BASELINE[0], uid)
+            mid = str(uid).encode()
             msg = email.message_from_bytes(parts[0][1], policy=email.policy.default)
             headers = [f"{h}: {msg[h]}" for h in ("From", "Reply-To", "Return-Path", "Subject", "Date") if msg[h]]
             raw = "\n".join(headers) + "\n\n" + _to_text(msg)

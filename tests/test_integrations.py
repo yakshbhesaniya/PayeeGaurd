@@ -87,27 +87,37 @@ def test_alert_posts_to_webhook(monkeypatch):
     assert integrations.alert("BLOCK case 1") is None and got["json"]["text"] == "BLOCK case 1"
 
 
-def test_imap_fetch_parses_unseen(monkeypatch):
+def test_imap_only_new_mail_and_never_marks_read(monkeypatch):
     for k, v in {"IMAP_HOST": "imap.example", "IMAP_USER": "ap@example.com", "IMAP_PASSWORD": "pw"}.items():
         monkeypatch.setenv(k, v)
+    integrations._BASELINE.clear()
     msg = email.message.EmailMessage()
     msg["From"] = "Billing <billing@freshworks.com>"
     msg["Subject"] = "Invoice INV-1"
     msg["Message-ID"] = "<m1@x>"
     msg.set_content("Please pay USD 4,200.00 to our account on file.")
+    box = {"uids": [b"1", b"2"]}
+    calls = []
 
     class FakeIMAP:
         def __init__(self, *a): pass
         def __enter__(self): return self
         def __exit__(self, *a): return False
         def login(self, u, p): pass
-        def select(self, f): return "OK", [b"1"]
-        def search(self, *a): return "OK", [b"1"]
-        def fetch(self, mid, what): return "OK", [(b"1", msg.as_bytes())]
+        def select(self, f, readonly=False): calls.append(("select", readonly)); return "OK", [b"2"]
+        def uid(self, cmd, *args):
+            calls.append((cmd, args))
+            if cmd == "search":
+                return "OK", [b" ".join(box["uids"])]
+            return "OK", [(b"3", msg.as_bytes())]
     monkeypatch.setattr(integrations.imaplib, "IMAP4_SSL", FakeIMAP)
+    assert integrations.fetch_unseen() == []                       # first poll: baseline only, old mail ignored
+    box["uids"].append(b"3")                                       # a new email arrives
     items = integrations.fetch_unseen()
-    assert items[0]["message_id"] == "<m1@x>" and "From: Billing <billing@freshworks.com>" in items[0]["raw"]
-    assert "USD 4,200.00" in items[0]["raw"]
+    assert len(items) == 1 and "USD 4,200.00" in items[0]["raw"]
+    assert all(r is True for c, r in calls if c == "select")       # mailbox opened read-only
+    assert any(c == "fetch" and "BODY.PEEK[]" in args[1] for c, args in calls)   # never marks as read
+    assert integrations.fetch_unseen() == []                       # not returned twice
 
 
 def test_juspay_sandbox_order(monkeypatch):
