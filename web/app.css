@@ -345,3 +345,17 @@ table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
 .doctools { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px dashed var(--rule-strong); }
 .doctools .btn { margin-top: 0; text-decoration: none; display: inline-block; font-size: 12.5px; padding: 8px 12px; }
 .tab { padding: 10px 1px; letter-spacing: .04em; }
+
+
+/* ---- two independent panels: the sidebar and the case file scroll separately (desktop) ---- */
+@media (min-width: 901px) {
+  html, body { height: 100%; }
+  body { height: 100vh; overflow: hidden; }
+  .desk { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .tray, .file { overflow-y: auto; min-height: 0; scrollbar-width: thin; }
+  .tray { background: rgba(235, 229, 216, .45); box-shadow: inset -1px 0 0 var(--rule-strong); border-right: 0; }
+  .file { scroll-behavior: smooth; }
+}
+.impact span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.resume { margin-top: 26px; }
+.resume .btn { box-shadow: 3px 3px 0 var(--ink); }

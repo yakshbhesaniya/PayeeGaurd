@@ -61,13 +61,14 @@ function renderInbox() {
 
 async function openEmail(i) {
   store.set({ kind: "email", id: samples.emails[i].id });
+  link(samples.emails[i].id.slice(0, 2));
   document.querySelectorAll("#inbox li").forEach((li) => li.classList.toggle("on", +li.dataset.i === i));
   await investigate(samples.emails[i].raw, samples.emails[i].id);
 }
 
 $("#pasteGo").addEventListener("click", () => {
   const raw = $("#pasteBox").value.trim();
-  if (raw) { store.set({ kind: "raw", raw }); investigate(raw, null); }
+  if (raw) { store.set({ kind: "raw", raw }); link(""); selectNone(); investigate(raw, null); }
 });
 
 $("#onbForm").addEventListener("submit", async (e) => {
@@ -75,6 +76,7 @@ $("#onbForm").addEventListener("submit", async (e) => {
   const f = new FormData(e.target), body = Object.fromEntries(f.entries());
   ["claimed_headcount", "claimed_offices"].forEach((k) => (body[k] = body[k] ? +body[k] : null));
   store.set({ kind: "onboard", body });
+  link(""); selectNone();
   running(ONB_STEPS, "Checking the vendor…");
   try { renderOnboarding(await api("/api/onboard", body), body); refreshStats(); } catch (err) { fail(err); }
 });
@@ -86,6 +88,7 @@ $("#resetBtn").addEventListener("click", async () => {
     Object.keys(seen).forEach((k) => delete seen[k]);
     samples.emails.forEach((m) => { m.state = null; m.decision = null; });
     store.set(null);
+    link("");
     renderInbox(); showEmpty(); refreshStats();
   } catch (err) { fail(err); }
 });
@@ -342,13 +345,13 @@ async function refreshStats() {
     const s = await api("/api/stats");
     const set = (id, val) => { const el = $(id); if (el && el.textContent !== String(val)) { el.textContent = val; el.closest("b")?.classList.remove("bump"); void el.offsetWidth; el.closest("b")?.classList.add("bump"); } };
     set("#stStopped", usd(s.blocked_usd));
-    $("#stStoppedSub").textContent = `blocked as fraud · ${usd(s.held_usd)} on hold`;
+    $("#stStoppedSub").textContent = `blocked · ${usd(s.held_usd)} on hold`;
     set("#stCases", s.cases);
     set("#stPay", s.by_decision.PAY || 0); set("#stHold", s.by_decision.HOLD || 0); set("#stBlock", s.by_decision.BLOCK || 0);
     set("#stMs", s.avg_ms == null ? "—" : s.avg_ms < 1000 ? `${s.avg_ms} ms` : `${(s.avg_ms / 1000).toFixed(1)} s`);
     set("#stCredits", s.credits_balance == null ? "—" : Math.round(s.credits_balance).toLocaleString("en-US"));
-    $("#stCreditsSub").textContent = s.credits_balance == null ? "Crustdata balance unavailable (offline)"
-      : `Crustdata credits left · live · ${s.credits_spent ?? 0} spent this session`;
+    $("#stCreditsSub").textContent = s.credits_balance == null ? "credits: offline" : "credits left · live";
+    $("#stCreditsSub").title = s.credits_balance == null ? "" : `${s.credits_spent ?? 0} credits spent this session`;
     lastStats = s;
   } catch { /* the strip is decorative; never block the desk */ }
 }
@@ -379,7 +382,7 @@ async function screenList(csv) {
     refreshStats();
   } catch (err) { fail(err); }
 }
-$("#screenSample").addEventListener("click", () => { store.set({ kind: "vendors" }); screenList(null); });
+$("#screenSample").addEventListener("click", () => { store.set({ kind: "vendors" }); link("vendors"); selectNone(); screenList(null); });
 $("#screenCsv").addEventListener("click", () => { const t = $("#csvBox").value.trim(); if (t) screenList(t); });
 
 refreshStats();
@@ -390,7 +393,7 @@ api("/api/samples").then((s) => {
   const h = decodeURIComponent(location.hash.slice(1));
   const i = h ? samples.emails.findIndex((m) => m.id.startsWith(h)) : -1;
   if (i >= 0) openEmail(i);
-  if (!h) restoreLast();
+  if (!h) offerResume();
   if (h === "memory") { document.querySelector('.tab[data-tab="memory"]').click(); }
   if (h === "vendors") { document.querySelector('.tab[data-tab="master"]').click(); screenList(null); }
   const o = h.match(/^onb(\d)$/);   // #onb1 runs onboarding example 1
@@ -419,6 +422,7 @@ function restoreLast() {
 /* ---------- Memory: what the agent remembers (persistent graph) ---------- */
 async function openMemory() {
   store.set({ kind: "memory" });
+  link("memory"); selectNone();
   $("#empty").hidden = true;
   const v = $("#caseView"); v.hidden = false;
   try {
@@ -482,3 +486,35 @@ function showDoc(a, v) {
 }
 
 $("#memRefresh")?.addEventListener("click", openMemory);
+
+
+/* ---------- link the sidebar, the case file and the URL ---------- */
+function link(hash) {
+  const url = location.pathname + location.search + (hash ? "#" + hash : "");
+  if (location.hash.slice(1) !== hash) history.pushState(null, "", url);
+}
+function selectNone() { document.querySelectorAll("#inbox li").forEach((li) => li.classList.remove("on")); }
+function showTab(name) { document.querySelector(`.tab[data-tab="${name}"]`)?.click(); }
+
+function openFromHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h) { selectNone(); showEmpty(); return; }
+  const i = samples.emails.findIndex((m) => m.id.startsWith(h));
+  if (i >= 0) { showTab("inbox"); openEmail(i); return; }
+  if (h === "vendors") { showTab("master"); screenList(null); return; }
+  if (h === "memory") { showTab("memory"); return; }
+}
+window.addEventListener("popstate", openFromHash);       // Back / Forward re-open the linked view
+
+function offerResume() {
+  const last = store.get();
+  if (!last) return;
+  const label = last.kind === "email" ? (samples.emails.find((m) => m.id === last.id)?.subject || "last case")
+    : { raw: "the pasted email", vendors: "the vendor list audit", memory: "the memory view", onboard: "the vendor check" }[last.kind];
+  if (!label) return;
+  const box = document.createElement("p");
+  box.className = "resume";
+  box.innerHTML = `<button class="btn ghost" id="resumeBtn">Resume: ${esc(label)}</button>`;
+  $("#empty").appendChild(box);
+  $("#resumeBtn").addEventListener("click", () => { box.remove(); restoreLast(); });
+}
