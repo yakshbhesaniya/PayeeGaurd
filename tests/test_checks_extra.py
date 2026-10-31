@@ -254,3 +254,19 @@ def test_C12_state_without_office(client, graph):
 def test_C12_pan_mismatch(client, graph):
     v, _ = verify(email(body=f"GSTIN: {_gstin()}  PAN: AAGCF9999Z"), client=client, graph=graph, save=False)
     assert any("does not match" in e.detail for e in v.evidence if e.check == "C12_tax_id")
+
+
+@pytest.mark.parametrize("sender", ["Accounts <accounts1@freshworks.com>", "billing2@freshworks.com",
+                                    "AR India <ar-india@freshworks.com>", "Freshworks <invoices.emea@freshworks.com>"])
+def test_shared_billing_mailboxes_are_role_senders(client, graph, sender):
+    """Companies bill from many shared mailboxes on the same domain: domain verifies, no person lookup, no noise."""
+    v, _ = verify(email(sender), client=client, graph=graph, save=False)
+    assert checks(v)["C2_domain"].status == "verified"
+    assert checks(v)["C3_signatory"].unchecked_reason == "not_applicable"
+
+
+def test_named_person_on_role_local_part_still_checked(client, graph):
+    """'Priya Shah <billing@...>' is a person signing from a shared box: look her up."""
+    from payeeguard.extract import extract
+    inv, _ = extract("From: Priya Shah <billing@freshworks.com>\n\nPay USD 10 invoice INV-2026-1")
+    assert inv.sender_name == "Priya Shah"

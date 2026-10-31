@@ -240,10 +240,17 @@ def _vendor(text: str, display: str | None, subject: str | None) -> tuple[str | 
 
 
 def _is_role_sender(display: str | None, email: str | None) -> bool:
+    """Shared billing mailboxes (billing@, accounts1@, ar-india@, invoices.emea@) are not a person to look up."""
     local = (email or "").split("@")[0]
-    if local in ROLE_LOCALPARTS:
-        return display is None or any(w.lower() in ROLE_WORDS for w in display.split())
+    parts = [p for p in re.split(r"[\d._+-]+", local) if p]          # accounts1 -> accounts, ar-india -> ar, india
+    if local in ROLE_LOCALPARTS or (parts and parts[0] in ROLE_LOCALPARTS):
+        return display is None or not _looks_like_person(display)
     return bool(display) and any(w.lower().strip(",.") in ROLE_WORDS for w in display.split())
+
+
+def _looks_like_person(display: str) -> bool:
+    words = [w for w in re.findall(r"[A-Za-z]+", display)]
+    return len(words) >= 2 and not any(w.lower() in ROLE_WORDS for w in words)
 
 
 def extract(raw_text: str) -> tuple[Invoice, ExtractMeta]:
