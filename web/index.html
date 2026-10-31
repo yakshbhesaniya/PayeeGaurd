@@ -28,14 +28,14 @@
   <div class="mast-right">
     <span class="conn" id="conn" title="Live connections"></span>
     <span class="dateline" id="dateline"></span>
-    <button class="linkish" id="resetBtn" title="Wipe the demo memory and reload the seeded payment history">Reset demo memory</button>
+    <button class="linkish" id="memoryBtn">Memory</button>
+    <button class="linkish" id="resetBtn" title="Wipe the demo memory and reload the seeded payment history">Reset</button>
   </div>
 </header>
 
 <section class="impact" id="impact" aria-label="Impact so far">
   <div><b id="stStopped">$0</b><span id="stStoppedSub">blocked as fraud</span></div>
-  <div><b id="stCases">0</b><span>requests investigated</span></div>
-  <div class="split"><b><i class="pay" id="stPay">0</i> / <i class="hold" id="stHold">0</i> / <i class="block" id="stBlock">0</i></b><span>pay / hold / block</span></div>
+  <div class="split"><b><i class="pay" id="stPay">0</i> / <i class="hold" id="stHold">0</i> / <i class="block" id="stBlock">0</i></b><span><em id="stCases">0</em> requests · pay / hold / block</span></div>
   <div><b id="stMs">—</b><span>per decision</span></div>
   <div><b id="stCredits">—</b><span id="stCreditsSub">Crustdata credits left · live</span></div>
 </section>
@@ -44,53 +44,43 @@
   <aside class="tray">
     <nav class="tabs" role="tablist">
       <button role="tab" class="tab on" data-tab="inbox">Inbox</button>
-      <button role="tab" class="tab" data-tab="paste">Paste</button>
-      <button role="tab" class="tab" data-tab="onboard">Onboard</button>
-      <button role="tab" class="tab" data-tab="master">Vendors</button>
-      <button role="tab" class="tab" data-tab="memory">Memory</button>
+      <button role="tab" class="tab" data-tab="vendors">Vendors</button>
     </nav>
 
     <section class="pane on" id="pane-inbox">
-      <p class="hint">Unseen requests waiting for payment. Open one to investigate.</p>
+      <div class="paste">
+        <button class="linkish" id="pasteToggle">+ Paste an email</button>
+        <div id="pasteArea" hidden>
+          <textarea id="pasteBox" spellcheck="false" placeholder="From: Billing &lt;billing@vendor.com&gt;&#10;Subject: Invoice INV-001&#10;&#10;Please pay USD 4,200.00 to…"></textarea>
+          <button class="btn ink" id="pasteGo">Investigate</button>
+        </div>
+      </div>
       <div id="liveBox"></div>
       <ol class="inbox" id="inbox"></ol>
     </section>
 
-    <section class="pane" id="pane-paste">
-      <p class="hint">Paste any invoice or bank-change email, headers included.</p>
-      <textarea id="pasteBox" spellcheck="false" placeholder="From: Billing &lt;billing@vendor.com&gt;&#10;Subject: Invoice INV-001&#10;&#10;Please pay USD 4,200.00 to…"></textarea>
-      <button class="btn ink" id="pasteGo">Investigate this email</button>
-    </section>
-
-    <section class="pane" id="pane-onboard">
-      <p class="hint">“Here is a new vendor’s name and website. Is it a real, trading business?”</p>
+    <section class="pane" id="pane-vendors">
+      <h4 class="ptitle">Check one vendor</h4>
       <form id="onbForm" class="form">
         <label>Vendor name<input name="vendor_name" required placeholder="Freshworks"></label>
         <label>Website<input name="website" required placeholder="https://www.freshworks.com"></label>
-        <div class="row3">
-          <label>Country<input name="claimed_country" placeholder="US" maxlength="40"></label>
-          <label>Staff<input name="claimed_headcount" type="number" min="1" placeholder="120"></label>
-          <label>Offices<input name="claimed_offices" type="number" min="1" placeholder="3"></label>
-        </div>
-        <button class="btn ink" type="submit">Check this vendor</button>
+        <details class="more"><summary>Claims to verify (optional)</summary>
+          <div class="row3">
+            <label>Country<input name="claimed_country" placeholder="US" maxlength="40"></label>
+            <label>Staff<input name="claimed_headcount" type="number" min="1" placeholder="120"></label>
+            <label>Offices<input name="claimed_offices" type="number" min="1" placeholder="3"></label>
+          </div>
+        </details>
+        <button class="btn ink" type="submit">Check vendor</button>
       </form>
-      <p class="hint small">Try one:</p>
       <ul class="examples" id="onbExamples"></ul>
-    </section>
 
-    <section class="pane" id="pane-memory">
-      <p class="hint">Everything the agent has learned: vendors and the accounts they are paid to, accounts tied to blocked
-        attacks, onboarded vendors and recent cases. Kept across page refreshes and server restarts.</p>
-      <button class="btn ink" id="memRefresh">Refresh memory</button>
-    </section>
-
-    <section class="pane" id="pane-master">
-      <p class="hint">Audit your whole vendor master at once: shared bank accounts, duplicate vendors, lookalike
-        domains, accounts used in past attacks.</p>
-      <button class="btn ink" id="screenSample">Screen the sample vendor list (7 vendors)</button>
-      <p class="hint small">Or paste your CSV (name,domain,iban,account,swift,ifsc,country):</p>
-      <textarea id="csvBox" class="short" spellcheck="false" placeholder="name,domain,iban,account,swift,ifsc,country&#10;Acme Ltd,acme.com,,12345678,,HDFC0000001,IN"></textarea>
-      <button class="btn" id="screenCsv">Screen this list</button>
+      <h4 class="ptitle">Audit the whole vendor list</h4>
+      <button class="btn" id="screenSample">Run on sample list (7 vendors)</button>
+      <details class="more"><summary>Paste your own CSV</summary>
+        <textarea id="csvBox" class="short" spellcheck="false" placeholder="name,domain,iban,account,swift,ifsc,country&#10;Acme Ltd,acme.com,,12345678,,HDFC0000001,IN"></textarea>
+        <button class="btn" id="screenCsv">Audit this list</button>
+      </details>
     </section>
   </aside>
 

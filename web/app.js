@@ -394,11 +394,11 @@ api("/api/samples").then((s) => {
   const i = h ? samples.emails.findIndex((m) => m.id.startsWith(h)) : -1;
   if (i >= 0) openEmail(i);
   if (!h) offerResume();
-  if (h === "memory") { document.querySelector('.tab[data-tab="memory"]').click(); }
-  if (h === "vendors") { document.querySelector('.tab[data-tab="master"]').click(); screenList(null); }
+  if (h === "memory") openMemory();
+  if (h === "vendors") { showTab("vendors"); screenList(null); }
   const o = h.match(/^onb(\d)$/);   // #onb1 runs onboarding example 1
   if (o && samples.onboarding[+o[1] - 1]) {
-    document.querySelector('.tab[data-tab="onboard"]').click();
+    showTab("vendors");
     document.querySelectorAll("#onbExamples li")[+o[1] - 1].click();
     $("#onbForm").requestSubmit();
   }
@@ -409,11 +409,11 @@ function restoreLast() {
   const last = store.get();
   if (!last) return;
   if (last.kind === "email") { const i = samples.emails.findIndex((m) => m.id === last.id); if (i >= 0) openEmail(i); }
-  else if (last.kind === "raw") { document.querySelector('.tab[data-tab="paste"]').click(); $("#pasteBox").value = last.raw; investigate(last.raw, null); }
-  else if (last.kind === "vendors") { document.querySelector('.tab[data-tab="master"]').click(); screenList(null); }
-  else if (last.kind === "memory") { document.querySelector('.tab[data-tab="memory"]').click(); }
+  else if (last.kind === "raw") { showTab("inbox"); openPaste(); $("#pasteBox").value = last.raw; investigate(last.raw, null); }
+  else if (last.kind === "vendors") { showTab("vendors"); screenList(null); }
+  else if (last.kind === "memory") { openMemory(); }
   else if (last.kind === "onboard" && last.body) {
-    document.querySelector('.tab[data-tab="onboard"]').click();
+    showTab("vendors");
     const f = $("#onbForm"); Object.entries(last.body).forEach(([k, val]) => { if (f[k]) f[k].value = val ?? ""; });
     f.requestSubmit();
   }
@@ -449,7 +449,7 @@ async function openMemory() {
         </tbody></table></div></section>`;
   } catch (err) { fail(err); }
 }
-document.querySelector('.tab[data-tab="memory"]')?.addEventListener("click", openMemory);
+$("#memoryBtn")?.addEventListener("click", openMemory);
 
 /* ---------- finished work: real actions a human takes ---------- */
 function docTools(a, v) {
@@ -497,7 +497,7 @@ function showDoc(a, v) {
   });
 }
 
-$("#memRefresh")?.addEventListener("click", openMemory);
+
 
 
 /* ---------- link the sidebar, the case file and the URL ---------- */
@@ -513,8 +513,8 @@ function openFromHash() {
   if (!h) { selectNone(); showEmpty(); return; }
   const i = samples.emails.findIndex((m) => m.id.startsWith(h));
   if (i >= 0) { showTab("inbox"); openEmail(i); return; }
-  if (h === "vendors") { showTab("master"); screenList(null); return; }
-  if (h === "memory") { showTab("memory"); return; }
+  if (h === "vendors") { showTab("vendors"); screenList(null); return; }
+  if (h === "memory") { openMemory(); return; }
 }
 window.addEventListener("popstate", openFromHash);       // Back / Forward re-open the linked view
 
@@ -558,3 +558,10 @@ async function pollLive() {
   } catch { /* keep the last list */ }
 }
 loadIntegrations();
+
+
+function openPaste() { $("#pasteArea").hidden = false; $("#pasteToggle").textContent = "− Close paste"; $("#pasteBox").focus(); }
+$("#pasteToggle")?.addEventListener("click", () => {
+  if ($("#pasteArea").hidden) openPaste();
+  else { $("#pasteArea").hidden = true; $("#pasteToggle").textContent = "+ Paste an email"; }
+});

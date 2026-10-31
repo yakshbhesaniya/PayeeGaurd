@@ -370,3 +370,20 @@ table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
 .live-list { margin-bottom: 14px; border-bottom: 2px solid var(--ink); }
 .err-inline { color: var(--block); text-transform: none; }
 .btn.red { box-shadow: 3px 3px 0 var(--ink); }
+
+/* ---- declutter: two tabs, quieter sidebar ---- */
+.tabs .tab { flex: 0 0 auto; padding: 10px 18px 10px 0; font-size: 12px; letter-spacing: .1em; }
+.paste { margin: 2px 0 12px; }
+.paste #pasteArea { margin-top: 10px; }
+.paste textarea { min-height: 180px; }
+.ptitle { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .14em; color: var(--ink-2); margin: 6px 0 10px; }
+.ptitle + .form, .ptitle + .btn { margin-top: 0; }
+#pane-vendors .ptitle:not(:first-child) { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--rule); }
+details.more { margin: 8px 0; }
+details.more summary { cursor: pointer; font: 12px var(--mono); color: var(--ink-2); }
+details.more[open] summary { margin-bottom: 8px; }
+.examples { margin-top: 10px; }
+.examples li { padding: 7px 0; font-size: 12.5px; }
+.impact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.impact span em { font-style: normal; color: var(--paper); font-weight: 600; }
+.hint { font-size: 12.5px; }
