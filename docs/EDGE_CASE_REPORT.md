@@ -138,3 +138,77 @@ and both are attacks visible solely through payment memory, which is exactly wha
 - Stale employment data can't cause a PAY on a bank change (R3), but can let a recent leaver look current.
 - Weights are not statistically calibrated; they are auditable and covered by tests and ablation.
 - The regex extractor handles the tested formats; unusual layouts fall back to HOLD, or use Claude via MCP with grounding.
+
+## 7. Design questions raised by the team, and what PayeeGuard does
+
+### 7.1 Which data fields do we extract and check?
+
+Many commonly suggested fraud fields come from **card payments at an online checkout**. An invoice or bank-change
+email contains no card, no customer browser and no "submit" button, so those fields don't exist for this job.
+
+| Field | Fits invoice fraud? | What PayeeGuard does |
+|---|---|---|
+| Payee / vendor business name | ✅ Core | Extracted; resolved to one company in Crustdata (`C1_vendor`); also matched across the vendor list for duplicates |
+| Bank account number / IBAN | ✅ Core | Extracted; IBAN mod-97 checksum (`C11`); fingerprinted (HMAC) and compared with payment history (`G1`), other vendors (`G2`) and blocked cases (`G3`) |
+| SWIFT / BIC / IFSC | ✅ Core | Extracted; format check and country consistency (`C11`); `XXX` branch suffix normalised |
+| Transaction amount | ✅ Core | All formats parsed (lakh, crore, European, `$`); anomaly vs history (`C9`); missing/negative ⇒ HOLD |
+| Invoice / reference number | ✅ Core | Extracted (case-insensitive); duplicate / replay detection (`G4`) |
+| Tax ID: GSTIN / PAN (India) | ✅ | **`C12_tax_id`**: GSTIN checksum, PAN entity type (individual PAN on a company = red flag), PAN-in-GSTIN match, GSTIN state vs the vendor's Indian office states from Crustdata |
+| EIN / VAT / LEI | ✅ Useful | Roadmap. LEI can be verified free against the public GLEIF database; VAT via the EU VIES service |
+| Velocity (requests per account or vendor in 1 h / 24 h / 7 d) | ✅ Useful | Partly covered: duplicate invoices (`G4`), the same account across vendors (`G2`, vendor screening) and accounts tied to blocked campaigns (`G3`). A "N bank-change requests in 7 days" rule is a small addition on the existing graph |
+| Payer legal name and email age | ❌ The payer is **our own company** | Not applicable; we check the **sender's** domain age instead (`C8`, RDAP) |
+| IP address, VPN / proxy flag | ❌ Card-checkout fields | Not present in an emailed invoice. The email equivalent is header analysis (SPF/DKIM/Received); roadmap via `.eml` intake |
+| AVS / CVV match, card BIN | ❌ Card-checkout fields | Out of scope: B2B invoices are paid by bank transfer, not card |
+| Billing / shipping address | ❌ Card-checkout fields | For invoices we use the **remit country** and the vendor's **office countries** instead (`C5`) |
+| Merchant Category Code (MCC) | ❌ Card-network field | The invoice-world equivalent is Crustdata's industry and company type, used in onboarding and `C12` |
+
+### 7.2 Is Crustdata our only source of truth for vendors?
+
+No. Each question has its own source, and every fact is cited:
+
+| Question | Source |
+|---|---|
+| Is the vendor a real company? What are its domains, offices, leaders, size? | **Crustdata** (Company Identify / Enrich) |
+| Does the sender work there, or used to? | **Crustdata** (Person Search, employment timeline) |
+| Has this vendor been paid to this account before? Is the account used by another vendor or a blocked attack? Was this invoice already paid? | **Our payment-trust graph** (our own history) |
+| Is the sender's domain real, new or able to receive mail? | **Domain registry and DNS** (RDAP; DNS-over-HTTPS) |
+| Are the bank and tax identifiers well-formed? | **Mathematical validation** (IBAN mod-97, GSTIN mod-36, SWIFT/IFSC format) |
+| Does any vendor in the list share an account, duplicate a company or imitate another? | **Vendor-master screening** across the whole list |
+| Is this really the vendor asking? | **A human callback** on a contact found independently (Crustdata `funding.phone_number`/`contact_email` or the official website, never the email) |
+
+### 7.3 What if the vendor is new or not in Crustdata? How do we decide the account is genuine?
+
+We don't guess, in either direction.
+
+- **A missing record is never fraud:** C1 becomes `unchecked`, which adds no risk. **It is never proof either:** confidence drops, so the payment is **held**, not paid (rules R3/R7).
+- The output is **finished work for a human:** a KYB onboarding task (registration certificate, tax ID, bank letter on letterhead, a contact verified by phone) plus a callback script.
+- Positive red flags still apply to unknown vendors: a non-existent or brand-new sender domain (`C8`), an invalid IBAN or GSTIN (`C11`, `C12`), a lookalike of a vendor we know (`C2`), an account used in a blocked case (`G3`).
+- Once a human approves, the vendor and its account enter the graph, so the **next** invoice is checked against that history.
+- **Proving who owns a bank account** needs a bank name-check (penny drop / Confirmation of Payee). That's the top roadmap item; PayeeGuard checks the *request*, not the bank's ledger.
+
+### 7.4 What change in transaction location triggers an alarm, and on what basis?
+
+We use **consistency, not distance thresholds or IP geolocation.** Invoices carry no IP, and a kilometre threshold
+would be arbitrary.
+
+| Signal | Basis | Effect |
+|---|---|---|
+| Bank country is not where the vendor has an HQ or office (per Crustdata) | `C5_geo` | +20 risk ⇒ at least HOLD |
+| IBAN/SWIFT country differs from the country named in the email | `C11_bank_format` | +15 risk |
+| GSTIN state has no vendor office in that state | `C12_tax_id` | +10 risk |
+| A known vendor asks to pay a new account (any country) | `G1_account_history` + rule R3 | Never auto-paid ⇒ HOLD with callback |
+| The account was used in a blocked attack | `G3_account_flagged` | Hard BLOCK |
+
+### 7.5 Customer privacy: how do we handle it, and what are the guardrails?
+
+| Guardrail | How it's enforced | Verified by |
+|---|---|---|
+| No raw bank numbers stored | Accounts stored only as keyed HMAC fingerprints; outputs show only the last 4 digits + country | `test_Y1_Y2_*` |
+| No raw email stored | Reports keep extracted indicators, not the email body | `test_Y1_Y2_*` |
+| Secrets protected | API key and fingerprint secret only in `.env` (git-ignored); the graph refuses to start without a real secret | `test_G11_*`, `test_fp_secret_required_whitespace_*` |
+| People data minimised | Person data used only to verify a claimed role; Enrich requests only the field groups needed | design + code review |
+| Nothing leaves without a human | No email sent, no money moved; every output labelled SIMULATED / DRAFT; watchers opt-in only | `test_Y4_*`, `PAYEEGUARD_WATCHERS` |
+| Tamper-evident record | Every decision and human action in a hash-chained audit log; tampering reported at the exact line | `test_P6_*`, audit tests |
+| LLM can't invent facts | Fields from Claude accepted only if they appear in the email text | grounding tests |
+| Web hardening | No path traversal, body size limit, JSON-object validation, no stack traces to the browser | `tests/test_web.py` |
+| Roadmap | DPDP Act (India) / GDPR assessment, data-retention policy, encryption at rest, SSO and roles | spec section 19a |
