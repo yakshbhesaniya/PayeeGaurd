@@ -210,7 +210,11 @@ def _write_graph(v: Verdict, inv, ctx, graph: Graph, hyp, s) -> None:
     else:
         graph.save_case(case_id, v.decision, v.decision, data)
     if v.decision == "BLOCK":
-        flags = [n for n in ((fp.id if fp and fp.strong else None), sender_node) if n]
+        # Never flag the vendor's own verified account: a scam email that copies the real account (blocked for its
+        # sender or channel) must not poison every genuine invoice that pays that account afterwards.
+        g1 = next((e for e in v.evidence if e.check == "G1_account_history"), None)
+        own_account = bool(g1 and g1.status == "verified")
+        flags = [n for n in ((fp.id if fp and fp.strong and not own_account else None), sender_node) if n]
         graph.flag(case_id, flags, f"verdict:BLOCK@case:{case_id} ({v.decision_rule})")
     graph.commit()
 

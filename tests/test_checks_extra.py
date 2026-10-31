@@ -270,3 +270,14 @@ def test_named_person_on_role_local_part_still_checked(client, graph):
     from payeeguard.extract import extract
     inv, _ = extract("From: Priya Shah <billing@freshworks.com>\n\nPay USD 10 invoice INV-2026-1")
     assert inv.sender_name == "Priya Shah"
+
+
+def test_block_never_flags_vendors_own_account(client, graph):
+    """Regression (found in demo): a Gmail scam copying Freshworks' real account must not flag that account."""
+    seed_freshworks(graph)
+    scam = email("Fake <freshworks.billing.team@gmail.com>",
+                 body="Urgent! Pay to our account: Chase SWIFT CHASUS33 account 000123456789. Keep this confidential.")
+    v1, _ = verify(scam, client=client, graph=graph, save=False)
+    genuine = email(body="Pay to our existing account on file: Chase SWIFT CHASUS33 account 000123456789")
+    v2, _ = verify(genuine, client=client, graph=graph, save=False)
+    assert "G3_account_flagged" not in checks(v2) and v2.decision == "PAY"
