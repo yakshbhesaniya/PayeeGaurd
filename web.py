@@ -224,7 +224,7 @@ def _save_live() -> None:
     LIVE_FILE.write_text(json.dumps(LIVE[-50:]), encoding="utf-8")
 
 
-def poll_inbox_forever(every: int = 20) -> None:
+def poll_inbox_forever(every: int = 10) -> None:
     """Real-time inbox: every N seconds fetch unread mail, verify it, keep it for the desk, alert on HOLD/BLOCK."""
     seen = {m["message_id"] for m in LIVE}
     while True:
@@ -239,7 +239,7 @@ def poll_inbox_forever(every: int = 20) -> None:
                 with LOCK:
                     r = api_verify({"raw_text": m["raw"]})
                 v = r["verdict"]
-                LIVE.append({**m, "case_id": v["case_id"], "decision": v["decision"], "received": time.strftime("%H:%M")})
+                LIVE.append({**m, "case_id": v["case_id"], "decision": v["decision"], "received": time.strftime("%H:%M:%S")})
                 _save_live()
             LIVE_ERR.clear()
         except Exception as e:  # noqa: BLE001 - keep polling; show the error in the desk
@@ -253,7 +253,7 @@ def api_live(_body: dict | None = None) -> dict:
         items = []
         for m in reversed(LIVE[-20:]):
             case = g.get_case(m["case_id"]) or {}
-            items.append({k: m[k] for k in ("message_id", "subject", "from", "received", "raw", "case_id")} |
+            items.append({k: m.get(k) for k in ("message_id", "subject", "from", "received", "raw", "case_id", "folder")} |
                          {"decision": case.get("decision", m.get("decision")), "state": case.get("state")})
     finally:
         g.close()

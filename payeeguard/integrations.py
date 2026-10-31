@@ -15,6 +15,7 @@ import logging
 import re
 import smtplib
 import ssl
+import time
 from email.message import EmailMessage
 
 import httpx
@@ -200,36 +201,57 @@ def _to_text(msg) -> str:
     return body
 
 
-_BASELINE: list[int] = []     # highest mailbox UID when the watcher started: older mail is never read
+_STARTED = time.time()
+_SEEN: set[str] = set()          # "folder:uid" already returned
+
+
+def _watch_folders() -> list[str]:
+    """Inbox AND Spam by default: scam invoices often land in spam. Override with IMAP_FOLDERS=INBOX,Other."""
+    custom = _env("IMAP_FOLDERS") or _env("IMAP_FOLDER")
+    return [f.strip() for f in custom.split(",") if f.strip()] if custom else ["INBOX", "[Gmail]/Spam"]
 
 
 def fetch_unseen(limit: int = 10) -> list[dict]:
-    """Return NEW messages (arrived after the watcher started) as raw-text emails ready for verify().
+    """Return NEW messages as raw-text emails ready for verify().
 
-    Privacy for personal mailboxes: mail that was already there is never fetched, nothing is marked as read
-    (BODY.PEEK), and the caller drops messages that aren't payment requests.
+    "New" = arrived after the watcher started, minus a short lookback (IMAP_LOOKBACK_MINUTES, default 15) so a
+    server restart during a demo never misses a just-sent email. Privacy for personal mailboxes: older mail is never
+    fetched, folders are opened read-only and nothing is marked as read (BODY.PEEK); the caller drops messages that
+    aren't payment requests.
     """
     if not status()["inbox"]:
         return []
+    cutoff = _STARTED - 60 * int(_env("IMAP_LOOKBACK_MINUTES") or "15")
+    since = time.strftime("%d-%b-%Y", time.localtime(cutoff))
     out = []
     with imaplib.IMAP4_SSL(_env("IMAP_HOST"), int(_env("IMAP_PORT") or "993")) as im:
         im.login(_env("IMAP_USER"), _env("IMAP_PASSWORD"))
-        im.select(_env("IMAP_FOLDER") or "INBOX", readonly=True)
-        typ, data = im.uid("search", None, "ALL")
-        uids = [int(u) for u in (data[0].split() if typ == "OK" and data and data[0] else [])]
-        if not _BASELINE:
-            _BASELINE.append(max(uids) if uids else 0)
-            return []                                   # first poll only records where "new" starts
-        new = [u for u in uids if u > _BASELINE[0]][-limit:]
-        for uid in new:
-            typ, parts = im.uid("fetch", str(uid), "(BODY.PEEK[])")
-            if typ != "OK" or not parts or not isinstance(parts[0], tuple):
+        for folder in _watch_folders():
+            try:
+                typ, _ = im.select(f'"{folder}"', readonly=True)
+            except imaplib.IMAP4.error:
                 continue
-            _BASELINE[0] = max(_BASELINE[0], uid)
-            mid = str(uid).encode()
-            msg = email.message_from_bytes(parts[0][1], policy=email.policy.default)
-            headers = [f"{h}: {msg[h]}" for h in ("From", "Reply-To", "Return-Path", "Subject", "Date") if msg[h]]
-            raw = "\n".join(headers) + "\n\n" + _to_text(msg)
-            out.append({"message_id": str(msg["Message-ID"] or mid.decode()), "subject": str(msg["Subject"] or ""),
-                        "from": str(msg["From"] or ""), "date": str(msg["Date"] or ""), "raw": raw[:20_000]})
+            if typ != "OK":
+                continue
+            typ, data = im.uid("search", None, "SINCE", since)
+            uids = [u for u in (data[0].split() if typ == "OK" and data and data[0] else [])]
+            for uid in uids[-limit:]:
+                key = f"{folder}:{uid.decode()}"
+                if key in _SEEN:
+                    continue
+                typ, parts = im.uid("fetch", uid, "(INTERNALDATE BODY.PEEK[])")
+                if typ != "OK" or not parts or not isinstance(parts[0], tuple):
+                    continue
+                m = re.search(rb'INTERNALDATE "([^"]+)"', parts[0][0])
+                arrived = imaplib.Internaldate2tuple(b'INTERNALDATE "' + m.group(1) + b'"') if m else None
+                if arrived and time.mktime(arrived) < cutoff:
+                    _SEEN.add(key)                       # older than the watch window: never read
+                    continue
+                _SEEN.add(key)
+                msg = email.message_from_bytes(parts[0][1], policy=email.policy.default)
+                headers = [f"{h}: {msg[h]}" for h in ("From", "Reply-To", "Return-Path", "Subject", "Date") if msg[h]]
+                raw = "\n".join(headers) + "\n\n" + _to_text(msg)
+                out.append({"message_id": str(msg["Message-ID"] or key), "subject": str(msg["Subject"] or ""),
+                            "from": str(msg["From"] or ""), "date": str(msg["Date"] or ""), "raw": raw[:20_000],
+                            "folder": "Spam" if "spam" in folder.lower() else folder})
     return out

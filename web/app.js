@@ -538,16 +538,19 @@ async function loadIntegrations() {
   try { INTEG = await api("/api/integrations"); } catch { INTEG = {}; }
   const items = [["crustdata", "Crustdata"], ["inbox", "Inbox"], ["email", "Email"], ["payments", INTEG.gateway === "simulated" ? "Payments · simulated" : INTEG.gateway ? `Payments · ${INTEG.gateway} sandbox` : "Payments"], ["alerts", "Alerts"], ["history", "Slack+mail history"]];
   $("#conn").innerHTML = items.map(([k, label]) => `<span class="dot ${INTEG[k] ? "on" : "off"}${k === "payments" && INTEG.gateway === "simulated" ? " sim" : ""}" title="${INTEG[k] ? "live" : "not connected: demo mode"}"><i></i>${esc(label)}</span>`).join("");
-  if (INTEG.inbox) { pollLive(); setInterval(pollLive, 15000); }
+  if (INTEG.inbox) { pollLive(); setInterval(pollLive, 10000); }
 }
+let liveCount = -1;
 async function pollLive() {
   try {
     const r = await api("/api/live-inbox");
+    if (liveCount >= 0 && r.items.length > liveCount) refreshStats();   // new mail arrived: update the strip
+    liveCount = r.items.length;
     const box = $("#liveBox");
     box.innerHTML = `<p class="hint small live-h"><i></i>Live mailbox · ${esc(r.inbox_user || "")}${r.error ? ` · <span class="err-inline">${esc(r.error)}</span>` : ""}</p>
       ${r.items.length ? `<ol class="inbox live-list">${r.items.map((m, k) => `<li data-k="${k}" class="${m.state || m.decision ? "tagged" : ""}">
         <span class="subj">${esc(m.subject || "(no subject)")}</span><span class="amt">${esc(m.received || "")}</span>
-        <span class="who">${esc(m.from)}</span>
+        <span class="who">${m.folder === "Spam" ? '<b class="spamtag">SPAM</b> ' : ""}${esc(m.from)}</span>
         ${m.state || m.decision ? `<span class="tagd ${({ RELEASED: "PAY", APPROVED: "PAY" })[m.state] || m.state || m.decision}">${esc(({ RELEASED: "PAID" })[m.state] || m.state || m.decision)}</span>` : ""}</li>`).join("")}</ol>`
         : `<p class="hint">Waiting for mail. Forward any invoice or bank-change email to ${esc(r.inbox_user || "the mailbox")}.</p>`}`;
     box.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
@@ -564,4 +567,11 @@ function openPaste() { $("#pasteArea").hidden = false; $("#pasteToggle").textCon
 $("#pasteToggle")?.addEventListener("click", () => {
   if ($("#pasteArea").hidden) openPaste();
   else { $("#pasteArea").hidden = true; $("#pasteToggle").textContent = "+ Paste an email"; }
+});
+
+/* ---------- logo = home ---------- */
+document.querySelector(".logo")?.addEventListener("click", () => {
+  stopRunning(); selectNone(); showTab("inbox"); link(""); showEmpty();
+  document.querySelectorAll(".live-list li").forEach((x) => x.classList.remove("on"));
+  window.scrollTo({ top: 0, behavior: "smooth" });
 });

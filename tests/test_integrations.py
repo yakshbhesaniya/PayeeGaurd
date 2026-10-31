@@ -8,7 +8,7 @@ from payeeguard import integrations
 
 KEYS = ["IMAP_HOST", "IMAP_USER", "IMAP_PASSWORD", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_PORT",
         "SAFE_RECIPIENT", "EMAIL_TO_VENDOR", "STRIPE_SECRET_KEY", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET",
-        "ALERT_WEBHOOK_URL", "RESEND_API_KEY", "RESEND_FROM", "SLACK_BOT_TOKEN", "JUSPAY_API_KEY", "JUSPAY_MERCHANT_ID", "JUSPAY_BASE_URL", "PAYMENT_GATEWAY"]
+        "ALERT_WEBHOOK_URL", "RESEND_API_KEY", "RESEND_FROM", "SLACK_BOT_TOKEN", "JUSPAY_API_KEY", "JUSPAY_MERCHANT_ID", "JUSPAY_BASE_URL", "PAYMENT_GATEWAY", "IMAP_FOLDERS", "IMAP_FOLDER"]
 
 
 @pytest.fixture(autouse=True)
@@ -87,37 +87,40 @@ def test_alert_posts_to_webhook(monkeypatch):
     assert integrations.alert("BLOCK case 1") is None and got["json"]["text"] == "BLOCK case 1"
 
 
-def test_imap_only_new_mail_and_never_marks_read(monkeypatch):
-    for k, v in {"IMAP_HOST": "imap.example", "IMAP_USER": "ap@example.com", "IMAP_PASSWORD": "pw"}.items():
+def test_imap_watches_inbox_and_spam_read_only(monkeypatch):
+    import time as _t
+    for k, v in {"IMAP_HOST": "imap.example", "IMAP_USER": "ap@example.com", "IMAP_PASSWORD": "pw",
+                 "IMAP_FOLDERS": "", "IMAP_FOLDER": ""}.items():
         monkeypatch.setenv(k, v)
-    integrations._BASELINE.clear()
+    integrations._SEEN.clear()
     msg = email.message.EmailMessage()
     msg["From"] = "Billing <billing@freshworks.com>"
     msg["Subject"] = "Invoice INV-1"
     msg["Message-ID"] = "<m1@x>"
     msg.set_content("Please pay USD 4,200.00 to our account on file.")
-    box = {"uids": [b"1", b"2"]}
+    new = _t.strftime("%d-%b-%Y %H:%M:%S +0000", _t.gmtime())
+    old = "01-Jan-2020 10:00:00 +0000"
     calls = []
 
     class FakeIMAP:
-        def __init__(self, *a): pass
+        def __init__(self, *a): self.folder = None
         def __enter__(self): return self
         def __exit__(self, *a): return False
         def login(self, u, p): pass
-        def select(self, f, readonly=False): calls.append(("select", readonly)); return "OK", [b"2"]
+        def select(self, f, readonly=False): self.folder = f; calls.append(("select", f, readonly)); return "OK", [b"1"]
         def uid(self, cmd, *args):
             calls.append((cmd, args))
             if cmd == "search":
-                return "OK", [b" ".join(box["uids"])]
-            return "OK", [(b"3", msg.as_bytes())]
+                return "OK", [b"1 2"]
+            when = new if (self.folder.endswith('Spam"') and args[0] == b"2") else old
+            return "OK", [(f'1 (UID {args[0].decode()} INTERNALDATE "{when}" BODY[] {{10}}'.encode(), msg.as_bytes())]
     monkeypatch.setattr(integrations.imaplib, "IMAP4_SSL", FakeIMAP)
-    assert integrations.fetch_unseen() == []                       # first poll: baseline only, old mail ignored
-    box["uids"].append(b"3")                                       # a new email arrives
     items = integrations.fetch_unseen()
-    assert len(items) == 1 and "USD 4,200.00" in items[0]["raw"]
-    assert all(r is True for c, r in calls if c == "select")       # mailbox opened read-only
-    assert any(c == "fetch" and "BODY.PEEK[]" in args[1] for c, args in calls)   # never marks as read
-    assert integrations.fetch_unseen() == []                       # not returned twice
+    assert len(items) == 1 and items[0]["folder"] == "Spam"           # only the new mail, found in Spam
+    assert {c[1] for c in calls if c[0] == "select"} == {'"INBOX"', '"[Gmail]/Spam"'}
+    assert all(c[2] is True for c in calls if c[0] == "select")       # read-only
+    assert all("BODY.PEEK[]" in c[1][1] for c in calls if c[0] == "fetch")
+    assert integrations.fetch_unseen() == []                          # never returned twice
 
 
 def test_juspay_sandbox_order(monkeypatch):

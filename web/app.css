@@ -389,3 +389,7 @@ details.more[open] summary { margin-bottom: 8px; }
 .hint { font-size: 12.5px; }
 
 .conn .dot.on.sim i { background: var(--hold); }
+
+.spamtag { font: 700 9px var(--mono); color: var(--block); border: 1px solid var(--block); padding: 0 3px; letter-spacing: .06em; }
+.logo { cursor: pointer; user-select: none; }
+.logo:hover .word i { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 4px; }
