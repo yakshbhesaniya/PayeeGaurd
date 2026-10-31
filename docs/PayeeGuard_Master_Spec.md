@@ -1,9 +1,9 @@
-# PayeeGuard — Master Spec v3 (single source of truth)
+# PayeeGuard — Master Spec v4 (as built, single source of truth)
 
 ContextCon 03 · IIT Bombay · Agentic Services Hackathon · Sat Oct 31, 2026
 Team of 3 (Yaksh, Aditya, Bahul) · Repo: https://github.com/yakshbhesaniya/PayeeGaurd
 
-> v3 replaces v1 and v2.1. This is the only spec; earlier docs were removed.
+> v4 = v3 plan + everything built on the day (sections marked **[BUILT]**). Status at 13:40 IST: **367 tests passing, live eval 13/13, offline eval 13/13, stress 54/54**. Latest code: branch `yaksh-crustdata`.
 > Every teammate pastes sections 1–17 into `CLAUDE.md` before writing code.
 > **Hackathon rule: no code before 10:30.** Docs, sample texts and API exploration with curl are allowed prep.
 
@@ -19,6 +19,16 @@ Team of 3 (Yaksh, Aditya, Bahul) · Repo: https://github.com/yakshbhesaniya/Paye
 | Onboarding name match | best confidence | Prefer a name match that has a domain on record ("Zoho Corporation" → Zoho, not a domainless subsidiary) |
 | Watchers (C7) | on PAY | Opt-in with `PAYEEGUARD_WATCHERS=1`, so demos never create real watches |
 | Insider check | P1 | Built into onboarding; active when `policy.toml [buyer] buyer_domain` is set |
+| India tax IDs | — | **C12_tax_id [BUILT]:** GSTIN mod-36 checksum, PAN-in-GSTIN match, individual PAN on a company, GSTIN state vs the vendor's Indian office states from Crustdata. Crustdata has **no** tax-ID fields; live GST-portal checks need a licensed GSP API |
+| Our own conversations | — | **C15_relationship [BUILT]:** searches Slack (channels the bot is in) and the mailbox (inbox + sent, 12 months, vendor mentions only) for "we ended this vendor"; no later renewal → contradicted 45, attack `terminated_vendor` (section 7b) |
+| Live integrations | demo outputs only | **[BUILT]** real inbox (IMAP watcher), real email (Resend over HTTPS; SMTP fallback), Slack alerts (webhook), payment gateway in **test/sandbox only** (Juspay, Razorpay, Stripe). Each switches on when its credential is in `.env` (section 23) |
+| Outputs wording | "SIMULATED" | "DRAFT FOR HUMAN RELEASE" / "RELEASED to the payment queue" (state `RELEASED`); documents get real actions: Send now, Open in mail app, tap-to-call the official number, Download |
+| Memory | graph only | **[BUILT]** persistent across refreshes and restarts; Memory view (vendors + paid accounts, accounts tied to blocked attacks, onboarded vendors, recent cases); inbox badges come from the server |
+| Vendor-master screening | P2 idea | **[BUILT]** CSV of all vendors → shared bank accounts, duplicate vendor records, lookalike vendor domains, accounts used in past attacks (`cli.py screen`, Vendors tab) |
+| Agent guard API | — | **[BUILT]** `POST /api/guard` → `{allow, decision, reasons, next_step}` for any AI payment agent over HTTP |
+| Shared billing mailboxes | role words only | `accounts1@`, `billing2@`, `ar-india@`, `invoices.emea@` recognised as role mailboxes (no person lookup, no noise) |
+| Slack history quirk | `oldest` filter | Slack returned an **empty** history for this app when `oldest` was set: dates are filtered in our code; PayeeGuard's own alert posts are ignored |
+| Gmail on venue Wi-Fi | SMTP | Venue blocks SMTP ports 465/587 → email goes through **Resend (HTTPS)**; on the free plan it only delivers to the Resend account's own address (`SAFE_RECIPIENT`) |
 | Team branches | three implementations merged | `yaksh-crustdata` holds the integrated code; Aditya's and Bahul's branches are merged (history kept) and their test scenarios are ported to the integrated API. See `docs/EDGE_CASE_REPORT.md` |
 
 ---
@@ -426,6 +436,27 @@ Remit country: stated → IBAN prefix → SWIFT chars 5–6 → IFSC (→ IN).
 - **C14_tactics:** quoted phrase matches. secrecy · channel_switch · authority · threat at 5 each; payment_method (crypto, USDT, gift card, personal account) 25; `urgency_language` 5. **Family sums internally, cap 25.**
 - **X1_extraction:** for sender, Reply-To, IBAN/account, SWIFT and amount, regex value ≠ Claude-supplied value → contradicted 10; **regex value is used**.
 - **X2_amount_conflict:** two labelled totals disagree (E8) → contradicted 10. (INTEGRITY takes the max of X1/X2.)
+- **X3_currency_assumed [BUILT]:** a bare `$` is noted as "assumed USD" (context row, 0 points).
+
+### 7a. C12_tax_id: India GST / PAN **[BUILT]** (COMPANY family, `checks_company.py`)
+
+| Finding | Status | Weight |
+|---|---|---|
+| GSTIN fails the mod-36 checksum or has an unknown state code | contradicted ("mistyped or fabricated") | 20 |
+| PAN quoted separately ≠ PAN inside the GSTIN | contradicted | 15 |
+| PAN entity type is **individual** (4th char `P`) but Crustdata says the vendor is a company | contradicted ("shell / personal-account pattern") | 15 |
+| GSTIN state code has no vendor office in that state (Crustdata `locations.all_office_addresses`) | contradicted | 10 |
+| Valid GSTIN registered in a state where the vendor has an office | verified | — |
+| No GSTIN/PAN in the request | unchecked / not_applicable | 0 |
+
+### 7b. C15_relationship: our own Slack and email history **[BUILT]** (`payeeguard/comms.py`)
+
+- **Sources:** Slack channels the PayeeGuard bot was invited to (`SLACK_BOT_TOKEN`, scopes `channels:read` + `channels:history`), and the mailbox's INBOX + Sent folders (IMAP, read-only, `BODY.PEEK`). Last **12 months**, only messages that **mention the vendor** (name token or domain). Results cached 60 s per vendor.
+- **Termination phrases** ("will not continue", "terminate", "do not send", "offboard", "not renew", "part ways"…) and **renewal phrases** ("renewed", "resume", "new contract", "extended"…).
+- **Rule:** the latest termination message with **no renewal after it** → contradicted **45**, cites the exact message (`slack:#channel@ts` or `mail:INBOX#uid`) and suggests: *"Confirm whether this is a final invoice for work delivered before that date; otherwise reject it."* A later renewal → verified. A source that fails → unchecked (`api_error`), never fraud. Not connected → not_applicable.
+- **Attack type** `terminated_vendor`: *"Invoice from a vendor we ended the relationship with"* (investigator priority after mule / impersonation / duplicate).
+- **Privacy:** PayeeGuard's own alert posts and the vendor's own invoice emails are ignored; only the cited snippet is kept in the case evidence.
+- **Benchmarks** (`eval`, `stress`, `ablate`) run with history search **off** so results never depend on a live mailbox or Slack.
 
 ---
 
@@ -962,6 +993,13 @@ If 6.2 shows Freshworks has **no GB office**, change the hero's IBAN country to 
 
 Record a CLI backup of 05 → 06. Rehearse twice offline.
 
+**[BUILT] Second scenario: "our own Slack says we ended this vendor" (fully automatic)**
+1. In Slack `#payeeguard-alerts` someone posts: *"We will not continue with Freshworks after this quarter. Please don't send any more invoices."*
+2. A perfectly normal Freshworks invoice (`samples/01_legit.txt`) is emailed to the watched Gmail inbox.
+3. Within ~20 s, with no clicks: the invoice appears in **Live mailbox**, verdict **HOLD**, attack *"Invoice from a vendor we ended the relationship with"*, evidence row `C15_relationship` quoting the Slack message; a HOLD alert posts to Slack.
+   Voice-over: *"Every identity check passes: real company, real domain, the account we always pay. But our own Slack says we ended this vendor, so the agent stops it."*
+Verified live at 13:30: sample 01 → HOLD (risk 45, R4), source `slack:#payeeguard-alerts@1793432739.621699`.
+
 ---
 
 ## 19. Cut list (in order)
@@ -1083,6 +1121,49 @@ ablation.py. Until A and B merge, use fake checks returning hard-coded Evidence 
 ```
 
 ---
+
+## 23. Live integrations and safety rails **[BUILT]** (`payeeguard/integrations.py`, `web.py`)
+
+| Integration | `.env` keys | What it does | Safety rail |
+|---|---|---|---|
+| **Real inbox** | `IMAP_HOST`, `IMAP_USER`, `IMAP_PASSWORD` | Background watcher polls every 20 s; new invoice emails are verified automatically and appear in **Live mailbox** | Only mail arriving **after the server starts**; mailbox opened **read-only**, nothing marked as read; non-payment mail is never verified or stored |
+| **Real email** | `RESEND_API_KEY` (HTTPS) or `SMTP_*` | "Send now (live)" sends the verification email / vendor warning | Goes to `SAFE_RECIPIENT` unless `EMAIL_TO_VENDOR=1`, so a demo never emails a real company |
+| **Slack alerts** | `ALERT_WEBHOOK_URL` | Every HOLD/BLOCK posts once per case | Webhook URL kept in `.env` only |
+| **Slack + mail history** | `SLACK_BOT_TOKEN` (+ IMAP) | C15 relationship history (section 7b) | Read-only; vendor mentions only; nothing stored but the cited snippet |
+| **Payment gateway** | `JUSPAY_API_KEY` + `JUSPAY_MERCHANT_ID` (+ `JUSPAY_BASE_URL`), or `RAZORPAY_KEY_ID/SECRET`, or `STRIPE_SECRET_KEY` | Releasing a payment creates a real gateway order/payment object | **Test/sandbox only**: `sk_test_`, `rzp_test_`, Juspay host must contain "sandbox"; live keys refused |
+| **Watchers** | `PAYEEGUARD_WATCHERS=1` | Crustdata entity watch on PAY | Off by default |
+
+Status lights in the masthead show which connections are live (green) vs demo mode (grey). Without credentials everything still works with drafts.
+
+**Live status at 13:40 IST:** Crustdata 🟢 · Inbox (Gmail, read-only) 🟢 · Email via Resend 🟢 · Slack alerts 🟢 · Slack + mail history 🟢 · Payments ⚪ (Juspay sandbox pending; Razorpay test keys as backup).
+
+## 24. The desk UI as built **[BUILT]**
+
+- **Masthead:** wordmark · connection lights · Memory · Reset.
+- **Impact strip (live data):** $ blocked · $ on hold (static demo FX) · requests with PAY/HOLD/BLOCK split · ms per decision · Crustdata credits left (live `GET /user/credits`).
+- **Sidebar (scrolls independently):** **Inbox** (Live mailbox + 10 samples with remembered badges, "+ Paste an email") and **Vendors** (check one vendor; audit the whole list).
+- **Case file:** animated verdict stamp · risk ruler · WHO/CHANNEL/MONEY facts · investigation with ruled-out alternatives · money-trail graph · evidence ledger with sources · finished-work documents with real actions · payment gate (release / approve / reject / override).
+- **Linked URL:** `#01`…`#10`, `#vendors`, `#memory`; Back/Forward work; the desk opens on the main screen with an optional "Resume".
+- **Type:** Archivo (condensed headlines), IBM Plex Sans / Mono; logo is a neutral wordmark until the team picks a mark (`web/logos.html` holds rejected concepts).
+
+## 25. Status and what remains (13:40 IST)
+
+| Done | Evidence |
+|---|---|
+| All checks, graph, investigator, scoring, gate, audit, MCP server, CLI, web desk | 367 tests passing |
+| Live Crustdata evaluation | 13/13 samples, offline 13/13, stress 54/54 |
+| Teammates' work merged | 221 of Aditya's and Bahul's test scenarios ported; 23 bugs they exposed fixed |
+| Edge cases | `docs/EDGE_CASE_REPORT.md` (27 bugs found and fixed, ablation, design Q&A) |
+
+| Remaining | Owner | Priority |
+|---|---|---|
+| **Record the Loom video** (05 → 06 hero, Slack "ended vendor" scenario, gate refusal, test numbers) | Team | Must, before 15:30 |
+| **Merge `yaksh-crustdata` into `main`** (or set it as default) so judges see the final code | Yaksh | Must |
+| **Submit the form** (repo + Loom links, WhatsApp group) | Team | Must |
+| Update README and edge-case report for C12, C15, live integrations | Claude | Should |
+| Payment gateway keys (Juspay sandbox or Razorpay test) | Yaksh | Optional |
+| Claude Desktop MCP connection for the "agent" moment | Bahul | Optional |
+| After the event: revoke the Gmail App Password, rotate Slack token and Resend key | Bahul / Yaksh | Must |
 
 ## 22. Rules compliance checklist (tick before 15:20)
 
