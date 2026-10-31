@@ -1,0 +1,77 @@
+{
+  "_note": "TEST DATA: invented people in the recorded Crustdata Person Search shape (spec 6.2). Freshworks = 6042422.",
+  "finance_current": {
+    "crustdata_person_id": 9001,
+    "basic_profile": {"name": "Asha Menon", "current_title": "Accounts Receivable Manager"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Freshworks", "title": "Accounts Receivable Manager", "crustdata_company_id": 6042422,
+                   "start_date": "2021-04-01", "end_date": null, "function_category": "Finance",
+                   "seniority_level": "Manager", "company_website": "https://www.freshworks.com"}],
+      "past": []}}
+  },
+  "promotion": {
+    "crustdata_person_id": 9002,
+    "basic_profile": {"name": "Vikram Shah", "current_title": "Finance Director"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Freshworks", "title": "Finance Director", "crustdata_company_id": 6042422,
+                   "start_date": "2024-01-01", "end_date": null, "function_category": "Finance"}],
+      "past": [{"name": "Freshworks", "title": "Finance Manager", "crustdata_company_id": 6042422,
+                "start_date": "2019-06-01", "end_date": "2023-12-31", "function_category": "Finance"}]}}
+  },
+  "ex_employee": {
+    "crustdata_person_id": 9003,
+    "basic_profile": {"name": "Rohan Verma", "current_title": "Consultant"},
+    "experience": {"employment_details": {
+      "current": [],
+      "past": [{"name": "Freshworks", "title": "Billing Specialist", "crustdata_company_id": 6042422,
+                "start_date": "2020-01-01", "end_date": "2024-12-15", "function_category": "Finance"}]}}
+  },
+  "multi_current": {
+    "crustdata_person_id": 9004,
+    "basic_profile": {"name": "Neha Kapoor"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Acme Advisory", "title": "Board Advisor", "crustdata_company_id": 777,
+                   "start_date": "2022-01-01", "end_date": null},
+                  {"name": "Freshworks", "title": "Treasury Analyst", "crustdata_company_id": 6042422,
+                   "start_date": "2023-03-01", "end_date": null, "function_category": "Finance"}],
+      "past": []}}
+  },
+  "engineer": {
+    "crustdata_person_id": 9005,
+    "basic_profile": {"name": "Arjun Rao"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Freshworks", "title": "Senior Software Engineer", "crustdata_company_id": 6042422,
+                   "start_date": "2022-07-01", "end_date": null, "function_category": "Engineering"}],
+      "past": []}}
+  },
+  "sales_accounts": {
+    "crustdata_person_id": 9006,
+    "basic_profile": {"name": "Priya Nair"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Freshworks", "title": "Director, Strategic Accounts", "crustdata_company_id": 6042422,
+                   "start_date": "2020-02-01", "end_date": null, "function_category": "Sales"}],
+      "past": []}}
+  },
+  "elsewhere": {
+    "crustdata_person_id": 9007,
+    "basic_profile": {"name": "Karan Mehta"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Other Corp", "title": "Finance Manager", "crustdata_company_id": 555,
+                   "start_date": "2021-01-01", "end_date": null, "function_category": "Finance"}],
+      "past": []}}
+  },
+  "same_name_a": {
+    "crustdata_person_id": 9008,
+    "basic_profile": {"name": "Amit Kumar"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Freshworks", "title": "Billing Manager", "crustdata_company_id": 6042422,
+                   "start_date": "2020-01-01", "end_date": null, "function_category": "Finance"}], "past": []}}
+  },
+  "same_name_b": {
+    "crustdata_person_id": 9009,
+    "basic_profile": {"name": "Amit Kumar"},
+    "experience": {"employment_details": {
+      "current": [{"name": "Freshworks", "title": "Product Designer", "crustdata_company_id": 6042422,
+                   "start_date": "2021-01-01", "end_date": null, "function_category": "Design"}], "past": []}}
+  }
+}
