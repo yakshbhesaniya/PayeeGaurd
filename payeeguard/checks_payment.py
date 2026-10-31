@@ -23,7 +23,8 @@ def check_payment(inv, ctx):
     # G1: does this vendor have history with this account?
     claim = "Account matches this vendor's payment history"
     if fp is None:
-        if known and (meta and (meta.on_file or not meta.accounts)):
+        # "No account given" means "pay the account on file" only when no bank change is being requested.
+        if known and not inv.bank_change_requested and (meta and (meta.on_file or not meta.accounts)):
             out.append(ev("G1_account_history", "PAYMENT", claim, "verified",
                           "No new account given: pay to the account on file", _cite("PAID", comp, "*"), confirms="money"))
         else:

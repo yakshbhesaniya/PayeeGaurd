@@ -495,3 +495,11 @@ def test_Y4_artifacts_labelled(client, graph):
     v, _ = verify(email("Bad <bad@freshw0rks-pay.com>", body=f"New bank details: {HERO}"),
                   client=client, graph=graph, save=False)
     assert v.actions and all("SIMULATED / DRAFT" in a.body for a in v.actions)
+
+
+def test_bank_change_without_account_is_not_on_file(client, graph):
+    """Regression (found in UI review): 'remit to our updated account' with no number must not confirm MONEY."""
+    seed_freshworks(graph)
+    v, _ = verify(email(body="Kindly remit to our updated HDFC account."), client=client, graph=graph, save=False)
+    g1 = checks(v)["G1_account_history"]
+    assert g1.status != "verified" and v.decision == "HOLD"

@@ -277,6 +277,7 @@ def onboard_facts(client, vendor_name, website, claims=None):
     head = full.get("headcount") or {}
     hire = full.get("hiring") or {}
     yoy = (head.get("growth_percent") or {}).get("yoy")
+    yoy = round(yoy, 1) if isinstance(yoy, (int, float)) else yoy
     row("Is it trading?", f"{head.get('total', '?')} staff (yoy {yoy if yoy is not None else 'n/a'}%), "
         f"{hire.get('openings_count', 0)} open roles, {(full.get('funding') or {}).get('num_funding_rounds', 0)} funding rounds",
         _cite(cid, "headcount.total,hiring.openings_count"))

@@ -19,7 +19,8 @@ def _contact(cb: dict | None) -> str:
 
 
 def _top(verdict: Verdict, n=4) -> str:
-    rows = [e for e in verdict.evidence if e.status == "contradicted"][:n]
+    rows = sorted((e for e in verdict.evidence if e.status == "contradicted"),
+                  key=lambda e: (not e.hard_block, -e.weight))[:n]
     return "\n".join(f"- {e.detail} — `{e.source}`" for e in rows) or "- No contradictions; verification incomplete."
 
 

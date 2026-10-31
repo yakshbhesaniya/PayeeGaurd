@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PayeeGuard Desk</title>
+<meta name="description" content="Know your payee before money moves.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141414'/%3E%3Ctext x='16' y='23' font-family='Georgia' font-size='20' fill='%23F3EFE6' text-anchor='middle' font-style='italic'%3EP%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="ink"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7"/>
+    <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 1.45"/>
+    <feComposite in="SourceGraphic" operator="in"/></filter>
+</svg>
+
+<header class="mast">
+  <div class="mast-left">
+    <span class="logo">Payee<em>Guard</em></span>
+    <span class="tag">Accounts-payable trust desk</span>
+  </div>
+  <div class="mast-right">
+    <span class="live"><i></i>Crustdata identity graph</span>
+    <span class="dateline" id="dateline"></span>
+    <button class="linkish" id="resetBtn" title="Wipe the demo memory and reload the seeded payment history">Reset demo memory</button>
+  </div>
+</header>
+
+<main class="desk">
+  <aside class="tray">
+    <nav class="tabs" role="tablist">
+      <button role="tab" class="tab on" data-tab="inbox">Inbox</button>
+      <button role="tab" class="tab" data-tab="paste">Paste email</button>
+      <button role="tab" class="tab" data-tab="onboard">New vendor</button>
+    </nav>
+
+    <section class="pane on" id="pane-inbox">
+      <p class="hint">Unseen requests waiting for payment. Open one to investigate.</p>
+      <ol class="inbox" id="inbox"></ol>
+    </section>
+
+    <section class="pane" id="pane-paste">
+      <p class="hint">Paste any invoice or bank-change email, headers included.</p>
+      <textarea id="pasteBox" spellcheck="false" placeholder="From: Billing &lt;billing@vendor.com&gt;&#10;Subject: Invoice INV-001&#10;&#10;Please pay USD 4,200.00 to…"></textarea>
+      <button class="btn ink" id="pasteGo">Investigate this email</button>
+    </section>
+
+    <section class="pane" id="pane-onboard">
+      <p class="hint">“Here is a new vendor’s name and website. Is it a real, trading business?”</p>
+      <form id="onbForm" class="form">
+        <label>Vendor name<input name="vendor_name" required placeholder="Freshworks"></label>
+        <label>Website<input name="website" required placeholder="https://www.freshworks.com"></label>
+        <div class="row3">
+          <label>Country<input name="claimed_country" placeholder="US" maxlength="40"></label>
+          <label>Staff<input name="claimed_headcount" type="number" min="1" placeholder="120"></label>
+          <label>Offices<input name="claimed_offices" type="number" min="1" placeholder="3"></label>
+        </div>
+        <button class="btn ink" type="submit">Check this vendor</button>
+      </form>
+      <p class="hint small">Try one:</p>
+      <ul class="examples" id="onbExamples"></ul>
+    </section>
+  </aside>
+
+  <section class="file" id="file" aria-live="polite">
+    <div class="empty" id="empty">
+      <p class="kicker">Case file</p>
+      <h1>Who are you <em>really</em> paying?</h1>
+      <p class="lede">Open a request from the inbox. PayeeGuard resolves the vendor and the sender in Crustdata’s
+        identity graph, follows the money through your payment history, names the attack if there is one, and does
+        the paperwork.</p>
+      <div class="legend">
+        <span><b class="sw pay"></b>Cleared to pay</span>
+        <span><b class="sw hold"></b>On hold: a human calls the vendor</span>
+        <span><b class="sw block"></b>Blocked: case file ready</span>
+      </div>
+    </div>
+    <div id="caseView" hidden></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>Every decision is deterministic and cited. Nothing here sends email or moves money: all outputs are simulated.</span>
+  <span id="footMeta"></span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

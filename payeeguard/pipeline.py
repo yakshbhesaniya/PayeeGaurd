@@ -38,19 +38,21 @@ def _early(case_id, summary, inv, ctx) -> tuple[Verdict, str]:
 
 
 def verify(raw_text: str, llm_fields: dict | None = None, *, client: CrustdataClient | None = None,
-           graph: Graph | None = None, save: bool = True) -> tuple[Verdict, str]:
+           graph: Graph | None = None, save: bool = True, extras: dict | None = None) -> tuple[Verdict, str]:
+    """extras (optional dict) is filled with UI data: facts, invoice summary, vendor label, money-trail."""
     client = client or CrustdataClient()
     own_graph = graph is None
     graph = graph or Graph()
     calls0, hits0, credits0 = client.calls, client.cache_hits, client.credits
     try:
-        return _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0)
+        return _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0,
+                       extras if extras is not None else {})
     finally:
         if own_graph:
             graph.close()
 
 
-def _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0):
+def _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0, extras):
     inv, meta = extract(raw_text or "")
     inv, x1 = cross_check(inv, llm_fields)
     case_id = case_id_for(raw_text or "")
@@ -112,13 +114,51 @@ def _verify(raw_text, llm_fields, client, graph, save, calls0, hits0, credits0):
     v.crustdata_credits = round(client.credits - credits0, 2)
     ctx["cache_hits"] = client.cache_hits - hits0
     v.actions = build_actions(v, inv, ctx)
+    v.graph_edges = _trail(v, inv, ctx)
     _write_graph(v, inv, ctx, graph, hyp, s)
+    fp = ctx.get("fp")
+    extras.update({
+        "facts": s.facts, "families": s.families, "vendor_label": ctx.get("vendor_label"),
+        "banner": ctx.get("banner"), "cache_hits": ctx.get("cache_hits", 0),
+        "invoice": {"vendor": inv.vendor_name, "sender": inv.sender_email, "sender_name": inv.sender_name,
+                    "invoice_number": inv.invoice_number, "amount": inv.amount, "currency": inv.currency,
+                    "account": fp.masked if fp else None, "remit_country": inv.remit_country,
+                    "bank_change": inv.bank_change_requested}})
     md = report.render(v, inv, ctx, full=False)
     if save:
         report.save(v, inv, ctx, md)
         md = report.render(v, inv, ctx, full=False)   # re-render so action paths appear
         audit.append("verified", case_id=case_id, decision=v.decision, risk=v.risk_score, rule=v.decision_rule)
     return v, md
+
+
+def _trail(v: Verdict, inv, ctx) -> list[dict]:
+    """Money-trail edges for the UI: sender -> invoice -> vendor / account -> history / blocked cases."""
+    by = {e.check: e for e in v.evidence}
+    st = lambda c: by[c].status if c in by else None  # noqa: E731
+    sender_state = "bad" if st("C2_lookalike") == "contradicted" or st("C2b_freemail") == "contradicted" \
+        else "ok" if st("C2_domain") == "verified" else "unknown"
+    vendor = ctx.get("vendor_label") or inv.vendor_name or "vendor?"
+    edges = []
+    if inv.sender_email:
+        edges.append({"src": "sender", "src_label": inv.sender_email.split("@")[1], "rel": "SENT", "dst": "invoice",
+                      "dst_label": inv.invoice_number or "invoice", "state": sender_state})
+    edges.append({"src": "invoice", "src_label": inv.invoice_number or "invoice", "rel": "CLAIMS_VENDOR",
+                  "dst": "vendor", "dst_label": vendor, "state": "ok" if st("C1_vendor") == "verified" else "unknown"})
+    fp = ctx.get("fp")
+    if fp:
+        acct_state = "bad" if st("G3_account_flagged") == "contradicted" else \
+            "warn" if st("G1_account_history") == "contradicted" or st("G2_account_other_vendor") == "contradicted" \
+            else "ok" if st("G1_account_history") == "verified" else "unknown"
+        edges.append({"src": "invoice", "src_label": inv.invoice_number or "invoice", "rel": "PAYS_TO",
+                      "dst": "account", "dst_label": fp.masked, "state": acct_state})
+        for i, c in enumerate(ctx.get("related_cases") or []):
+            edges.append({"src": "account", "src_label": fp.masked, "rel": "FLAGGED_IN", "dst": f"case{i}",
+                          "dst_label": f"blocked case {c}", "state": "bad"})
+    for p in (ctx.get("history_accounts") or [])[:2]:
+        edges.append({"src": "vendor", "src_label": vendor, "rel": f"PAID ×{p['n']}", "dst": f"hist_{p['last4']}",
+                      "dst_label": f"••••{p['last4']} {p['country'] or ''}".strip(), "state": "history"})
+    return edges
 
 
 def _challenges(graph, node, case_id) -> list[str]:
@@ -148,7 +188,8 @@ def _write_graph(v: Verdict, inv, ctx, graph: Graph, hyp, s) -> None:
             "sender_domain": geo.email_domain(inv.sender_email), "sender_node": sender_node,
             "fp": asdict(fp) if fp else None, "rule": v.decision_rule, "risk": v.risk_score,
             "attack": hyp.attack_type if hyp else "none",
-            "top_reason": next((e.detail for e in v.evidence if e.status == "contradicted"), v.decision_rule)}
+            "top_reason": next((e.detail for e in sorted((e for e in v.evidence if e.status == "contradicted"),
+                                                         key=lambda e: (not e.hard_block, -e.weight))), v.decision_rule)}
     old = graph.get_case(case_id)
     if old and old["state"] in ("APPROVED", "PAID_SIMULATED"):
         data["approvals"] = old["data"].get("approvals", [])
@@ -164,7 +205,8 @@ def _write_graph(v: Verdict, inv, ctx, graph: Graph, hyp, s) -> None:
 # ---- Mode 2 -------------------------------------------------------------------------------------------
 
 def onboard_vendor(vendor_name: str, website: str, claims: dict | None = None, *,
-                   client: CrustdataClient | None = None, graph: Graph | None = None) -> tuple[str, str]:
+                   client: CrustdataClient | None = None, graph: Graph | None = None,
+                   extras: dict | None = None) -> tuple[str, str]:
     client = client or CrustdataClient()
     own = graph is None
     graph = graph or Graph()
@@ -198,6 +240,10 @@ def onboard_vendor(vendor_name: str, website: str, claims: dict | None = None, *
                        f"onboard_vendor@crustdata:company/{f['cid']}")
             graph.commit()
         audit.append("onboarded", vendor=vendor_name, domain=domain, decision=decision)
+        if extras is not None:
+            extras.update({"rows": f["rows"], "reasons": reasons, "contact": f.get("contact"),
+                           "leaders": [{"name": n, "title": t, "since": s, "person_id": p}
+                                       for n, t, s, p in f["leaders"][:8]], "domain": domain, "cid": f["cid"]})
         lines = [f"# Vendor Trust Report: {decision}", f"{vendor_name} · {website}", "",
                  "| Question | Answer | Source |", "|---|---|---|"]
         lines += [f"| {q} | {a} | `{s}` |" for q, a, s in f["rows"]]

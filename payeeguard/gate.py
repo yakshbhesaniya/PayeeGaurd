@@ -50,7 +50,7 @@ def pay_invoice(case_id: str, graph: Graph, client=None) -> str:
              "account": fp.masked if fp else "account on file", "simulated": True})
     h = audit.append("paid_simulated", case_id=case_id, amount=d.get("amount"), currency=d.get("currency"))
     watch = ""
-    if client is not None and d.get("company_id") and not config.offline():
+    if client is not None and d.get("company_id") and not config.offline() and config.env("PAYEEGUARD_WATCHERS") == "1":
         watch = "\n" + create_watch(client, d["company_id"])
     return (f"SIMULATED payment queued: {d.get('currency')} {d.get('amount'):,.2f} to {d.get('vendor')} "
             f"({fp.masked if fp else 'account on file'}). Vendor history updated. Audit {h[:12]}.{watch}")
