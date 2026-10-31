@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PayeeGuard logo board</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #141414; --paper: #f3efe6; --green: #1d7f47; --mint: #5fd08f; --red: #d8352a; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 14px "IBM Plex Mono", monospace; padding: 28px 16px 60px; }
+  h1 { font: 800 34px "Archivo"; font-stretch: 75%; margin: 0 0 4px; }
+  p.sub { margin: 0 0 26px; color: #4a4740; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; max-width: 1180px; }
+  .card { background: #fbf9f4; border: 1.5px solid var(--ink); padding: 22px 22px 16px; position: relative; }
+  .num { position: absolute; top: 10px; right: 12px; font: 800 30px "Archivo"; font-stretch: 70%; color: #c9c3b6; }
+  .lockup { display: flex; align-items: center; gap: 12px; height: 76px; }
+  .lockup svg { flex: none; }
+  .word { font: 600 34px/1 "Archivo"; font-stretch: 82%; letter-spacing: -0.01em; }
+  .word b { font-weight: 800; }
+  .name { font: 600 12px "IBM Plex Mono"; text-transform: uppercase; letter-spacing: .12em; margin: 14px 0 4px; }
+  .why { color: #4a4740; font-size: 12.5px; line-height: 1.5; margin: 0; }
+  .dark { background: var(--ink); color: var(--paper); padding: 10px 12px; margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+  .dark .word { font-size: 22px; color: var(--paper); }
+</style>
+</head>
+<body>
+<h1>PayeeGuard: pick a logo</h1>
+<p class="sub">Six different directions. Tell me the number you like (or what to change). Each is shown on light and dark.</p>
+<div class="grid">
+
+  <div class="card"><span class="num">1</span>
+    <div class="lockup">
+      <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="none" stroke="#141414" stroke-width="5"/>
+        <circle cx="32" cy="27" r="7" fill="#141414"/><path d="M28 31h8l2.5 16h-13z" fill="#141414"/>
+        <path d="M44 14l6-6" stroke="#1d7f47" stroke-width="5" stroke-linecap="round"/></svg>
+      <span class="word">Payee<b>Guard</b></span></div>
+    <p class="name">Keyhole</p><p class="why">A lock you can only open with the right key: only the right payee gets paid. Simple, reads at favicon size.</p>
+    <div class="dark"><svg width="30" height="30" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="none" stroke="#f3efe6" stroke-width="6"/><circle cx="32" cy="27" r="7" fill="#f3efe6"/><path d="M28 31h8l2.5 16h-13z" fill="#f3efe6"/></svg><span class="word">Payee<b>Guard</b></span></div>
+  </div>
+
+  <div class="card"><span class="num">2</span>
+    <div class="lockup">
+      <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="14" cy="32" r="8" fill="#141414"/><circle cx="50" cy="32" r="8" fill="#1d7f47"/>
+        <path d="M22 32h20" stroke="#141414" stroke-width="5"/><rect x="26" y="22" width="12" height="20" rx="2.5" fill="#fbf9f4" stroke="#141414" stroke-width="4"/>
+        <path d="M29 22v-5a3 3 0 0 1 6 0v5" fill="none" stroke="#141414" stroke-width="4"/></svg>
+      <span class="word">Payee<b>Guard</b></span></div>
+    <p class="name">Locked link</p><p class="why">Two nodes of the trust graph with a padlock on the connection: the money path is secured. Tells the "graph" story.</p>
+    <div class="dark"><svg width="30" height="30" viewBox="0 0 64 64"><circle cx="14" cy="32" r="8" fill="#f3efe6"/><circle cx="50" cy="32" r="8" fill="#5fd08f"/><path d="M22 32h20" stroke="#f3efe6" stroke-width="5"/><rect x="26" y="22" width="12" height="20" rx="2.5" fill="#141414" stroke="#f3efe6" stroke-width="4"/></svg><span class="word">Payee<b>Guard</b></span></div>
+  </div>
+
+  <div class="card"><span class="num">3</span>
+    <div class="lockup">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#141414" stroke-linecap="round">
+        <path d="M32 8a24 24 0 0 1 24 24" stroke-width="4"/><path d="M8 32A24 24 0 0 1 32 8" stroke-width="4" opacity=".35"/>
+        <path d="M32 16a16 16 0 0 1 16 16" stroke-width="4"/><path d="M16 32a16 16 0 0 1 16-16" stroke-width="4" opacity=".35"/>
+        <path d="M32 24a8 8 0 0 1 8 8" stroke-width="4"/><path d="M14 44l10 9 26-26" stroke="#1d7f47" stroke-width="6" stroke-linejoin="round"/></svg>
+      <span class="word">Payee<b>Guard</b></span></div>
+    <p class="name">Identity print</p><p class="why">Fingerprint-like arcs (identity) completed by a green tick (verified). Says "we know who they are" without a shield.</p>
+    <div class="dark"><svg width="30" height="30" viewBox="0 0 64 64" fill="none" stroke="#f3efe6" stroke-linecap="round"><path d="M32 8a24 24 0 0 1 24 24" stroke-width="5"/><path d="M32 16a16 16 0 0 1 16 16" stroke-width="5"/><path d="M14 44l10 9 26-26" stroke="#5fd08f" stroke-width="7"/></svg><span class="word">Payee<b>Guard</b></span></div>
+  </div>
+
+  <div class="card"><span class="num">4</span>
+    <div class="lockup">
+      <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="#141414"/>
+        <g stroke="#f3efe6" stroke-width="2.5" stroke-linecap="round">
+          <path d="M32 9v6M32 49v6M9 32h6M49 32h6M15.7 15.7l4.2 4.2M44.1 44.1l4.2 4.2M48.3 15.7l-4.2 4.2M19.9 44.1l-4.2 4.2"/></g>
+        <circle cx="32" cy="32" r="11" fill="#f3efe6"/><path d="M32 32l0-9" stroke="#1d7f47" stroke-width="4" stroke-linecap="round"/></svg>
+      <span class="word">Payee<b>Guard</b></span></div>
+    <p class="name">Vault dial</p><p class="why">A safe's combination dial set to the green mark: money only moves when every check lines up.</p>
+    <div class="dark"><svg width="30" height="30" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="#f3efe6"/><circle cx="32" cy="32" r="11" fill="#141414"/><path d="M32 32v-9" stroke="#5fd08f" stroke-width="4"/></svg><span class="word">Payee<b>Guard</b></span></div>
+  </div>
+
+  <div class="card"><span class="num">5</span>
+    <div class="lockup">
+      <svg width="64" height="64" viewBox="0 0 64 64"><rect x="6" y="6" width="52" height="52" rx="14" fill="#1d7f47"/>
+        <path d="M22 46V18h12a9 9 0 0 1 0 18H22" fill="none" stroke="#fbf9f4" stroke-width="6" stroke-linejoin="round"/>
+        <path d="M33 44l5 5 9-11" fill="none" stroke="#fbf9f4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="word">Payee<b>Guard</b></span></div>
+    <p class="name">P-tick app icon</p><p class="why">A "P" whose leg turns into a check mark, in a friendly green tile. Feels like a modern product, works as an app icon.</p>
+    <div class="dark"><svg width="30" height="30" viewBox="0 0 64 64"><rect x="6" y="6" width="52" height="52" rx="14" fill="#5fd08f"/><path d="M22 46V18h12a9 9 0 0 1 0 18H22" fill="none" stroke="#141414" stroke-width="6"/></svg><span class="word">Payee<b>Guard</b></span></div>
+  </div>
+
+  <div class="card"><span class="num">6</span>
+    <div class="lockup">
+      <svg width="64" height="64" viewBox="0 0 64 64"><path d="M10 50 32 10l22 40z" fill="none" stroke="#141414" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M21 38l8 7 15-17" fill="none" stroke="#1d7f47" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="word" style="letter-spacing:.02em;text-transform:uppercase;font-size:28px">payee<b>guard</b></span></div>
+    <p class="name">Delta check</p><p class="why">A sharp triangle (alert / change) resolved by a tick: "every change in payment details gets verified". Bold, geometric.</p>
+    <div class="dark"><svg width="30" height="30" viewBox="0 0 64 64"><path d="M10 50 32 10l22 40z" fill="none" stroke="#f3efe6" stroke-width="6"/><path d="M21 38l8 7 15-17" fill="none" stroke="#5fd08f" stroke-width="6"/></svg><span class="word">PAYEE<b>GUARD</b></span></div>
+  </div>
+
+</div>
+</body>
+</html>
