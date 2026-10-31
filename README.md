@@ -66,6 +66,8 @@ against a $367k average loss.
 | **Vendor-master screening** | A CSV of all your vendors | Cross-vendor alerts: shared bank accounts, duplicate vendor records, lookalike domains, accounts used in past attacks |
 | **Payment gate** | A case id | Releases a simulated payment only if the case is PAY or a human approved it |
 | **Agent guard API** | `POST /api/guard` from any AI payment agent | `{allow, decision, reasons, next_step}` before the agent pays |
+| **Live inbox (automatic)** | A real Gmail mailbox (Inbox + Spam) watched every 10 s | Every new invoice email is verified with no clicks and appears in the desk's Live mailbox; HOLD/BLOCK posts a Slack alert |
+| **Relationship history** | Our own Slack channels + mailbox (12 months) | If someone on our side ended the relationship ("we will not continue with X, don't send invoices") and nobody renewed, a new invoice from X is stopped and the message is cited |
 | **Memory** | Persistent payment-trust graph (survives refreshes and restarts) | Vendors and the accounts they're paid to, accounts tied to blocked attacks, onboarded vendors, recent cases: every new invoice is checked against all of it |
 
 **Interfaces:** a web desk (`web.py`), a CLI (`cli.py`), and an **MCP server** (`server.py`) so Claude Desktop or
@@ -79,6 +81,7 @@ Claude Code can act as the AP agent. Claude reads and orchestrates; PayeeGuard d
 | **Channel** | C2 sender domain belongs to the vendor (safe lookalike rule incl. homoglyphs, IDN, brand-in-subdomain) · C2b free mail · C2c display-name spoofing · C8 domain age and MX · C10 Reply-To mismatch | Crustdata domains; RDAP; DNS-over-HTTPS |
 | **Signatory** | C3 the sender's employment timeline: current employee, ex-employee, wrong person, role authority | Crustdata Person Search |
 | **Payment** | G1 account vs this vendor's history · G2 account used by another vendor · G3 account used in a blocked attack · G4 duplicate invoice · G5 several accounts in one email · C5 bank country vs offices · C9 amount anomaly · C11 IBAN/SWIFT/IFSC validity | Payment-trust graph; Crustdata locations; checksums |
+| **Relationship** | C15 our own Slack + email history: termination with no later renewal (attack *terminated_vendor*) | Slack Web API (bot token), IMAP (read-only) |
 | **Behaviour** | C14 quoted pressure tactics: secrecy, channel switch, authority, threats, crypto/gift cards, urgency (incl. Hinglish) | Phrase lists in `policy.toml` |
 | **Integrity** | X1 Claude's fields must match the email text · X2 conflicting totals | Grounding rule |
 
@@ -137,6 +140,31 @@ In the web desk, open **05** then **06** (or go to `http://127.0.0.1:8787/#06` a
 
 ---
 
+### Scenario 2: "our own Slack says we ended this vendor" (fully automatic)
+
+1. In Slack, someone posts: *"We will not continue with Freshworks after this quarter. Please don't send any more invoices."*
+2. A perfectly normal Freshworks invoice is emailed to the watched Gmail inbox.
+3. Within ~10 s, with no clicks, it appears in the desk's **Live mailbox**: **HOLD** (or **BLOCK** if sent from a
+   personal Gmail), attack *"Invoice from a vendor we ended the relationship with"*, the Slack message quoted as
+   evidence, and an alert in Slack.
+
+*Every identity check passes (real company, real domain, the account we always pay), but our own conversations say
+we ended this vendor, so the agent stops it.*
+
+### Live integrations and safety rails
+
+Each one switches on when its setting is in `.env`; without it the desk runs in demo mode with drafts. The masthead
+shows a light per connection.
+
+| Integration | Setting | Safety rail |
+|---|---|---|
+| Crustdata identity graph | `CRUSTDATA_API_KEY` | Responses cached; offline mode for the stage |
+| Real inbox (Gmail IMAP) | `IMAP_HOST`, `IMAP_USER`, `IMAP_PASSWORD` | Inbox + Spam, read-only, nothing marked as read; only mail from the last 15 min before start onwards; non-payment mail never stored |
+| Real email | `RESEND_API_KEY` (HTTPS) or `SMTP_*` | Goes to `SAFE_RECIPIENT` unless `EMAIL_TO_VENDOR=1`, so a demo never emails a real vendor |
+| Slack alerts | `ALERT_WEBHOOK_URL` | One alert per HOLD/BLOCK case |
+| Slack history (C15) | `SLACK_BOT_TOKEN` (`channels:read`, `channels:history`) | Reads only channels the bot is invited to; PayeeGuard's own alerts ignored |
+| Payment gateway | Juspay sandbox / Razorpay test / Stripe test keys, or `PAYMENT_GATEWAY=simulate` | Test/sandbox only, live keys refused; the simulated gateway is explicit and labelled "no money moved" |
+
 ## 5. Run it
 
 ```bash
@@ -158,6 +186,8 @@ cp .env.example .env     # add CRUSTDATA_API_KEY and PAYEEGUARD_FP_SECRET (gener
 | `python cli.py audit` | Verify the tamper-evident audit chain |
 | `python server.py` | MCP server: tools `verify_payee`, `onboard_vendor`, `pay_invoice`, `resolve_case`, `case_status` |
 
+**Live connections:** copy `.env.example` to `.env` and fill only what you want live (see the table above).
+
 **Offline demo:** set `PAYEEGUARD_OFFLINE=1` to run purely from the response cache (survives venue Wi-Fi).
 
 **Claude Desktop:** add to `%APPDATA%\Claude\claude_desktop_config.json`:
@@ -172,7 +202,7 @@ cp .env.example .env     # add CRUSTDATA_API_KEY and PAYEEGUARD_FP_SECRET (gener
 
 | Layer | Result |
 |---|---|
-| Test suite (our tests + 221 scenarios ported from Aditya's and Bahul's branches) | **347 passed** |
+| Test suite (our tests + 221 scenarios ported from Aditya's and Bahul's branches) | **368 passed** |
 | Live evaluation against Crustdata | **13/13** samples hit the expected verdict and attack type |
 | Same evaluation fully offline | **13/13** |
 | Metamorphic stress (CRLF, HTML, forwarded, quoted history, whitespace, signature noise) | **54/54** keep the same verdict |
@@ -209,6 +239,9 @@ only if it appears in the email text, so it can point at facts but never invent 
 - **Crustdata has no GST/tax-ID fields:** GSTIN is validated by checksum and compared with Crustdata's office
   states instead.
 - **Our first scoring blocked legitimate small vendors and double-counted facts:** we split risk from confidence.
+- **The venue Wi-Fi blocks Gmail's sending ports (465/587):** email goes out through Resend over HTTPS instead.
+- **Gmail put a demo invoice in Spam:** the watcher now reads Inbox and Spam (scam invoices often land there).
+- **Slack returned an empty history when a date filter was passed:** the 12-month window is applied in our own code.
 - **Merging three teammates' parallel implementations** hit incompatible interfaces. We kept one integrated
   codebase and ported 221 of their test scenarios onto it, which exposed 23 real bugs (all fixed).
 
@@ -221,6 +254,11 @@ only if it appears in the email text, so it can point at facts but never invent 
 - The API key and fingerprint secret live only in `.env` (git-ignored), and the graph refuses to start without a
   real secret.
 - People data is used only to verify a claimed role.
+- The inbox watcher is read-only, never marks mail as read, ignores older mail and drops anything that isn't a
+  payment request; Slack and mailbox history are searched only for the vendor in question, and only the cited
+  snippet is kept.
+- Outgoing email goes to a safe recipient by default; the payment gateway accepts only test/sandbox credentials or
+  an explicitly labelled simulation.
 - **A human presses send.** PayeeGuard never emails anyone or moves money by itself: emails open pre-filled in your own mail app, the callback is a tap-to-call link to the official number, and payments are released to a queue for bank upload. Watchers are opt-in.
 - Every decision and human action goes into a **hash-chained audit log**; tampering is reported at the exact line.
 - The web server rejects path traversal, oversized bodies and non-object JSON, and never shows stack traces.
@@ -251,7 +289,7 @@ payeeguard/        extract · client (Crustdata) · checks_* · graph · scoring
 web.py, web/       web desk (stdlib server + HTML/CSS/JS)
 cli.py             CLI          server.py   MCP server
 samples/           10 invoice emails, onboarding requests, vendor master CSV, seed payment history (synthetic)
-tests/             347 offline tests (edge cases, web, ported teammate scenarios)
+tests/             368 offline tests (edge cases, web, ported teammate scenarios)
 docs/              Master spec, edge-case & verification report, build log
 policy.toml        thresholds, FX, processors, free-mail list, tactic phrases
 ```
