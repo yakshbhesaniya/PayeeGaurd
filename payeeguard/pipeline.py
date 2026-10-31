@@ -5,7 +5,7 @@ import logging
 from dataclasses import asdict
 from datetime import datetime
 
-from . import __version__, audit, config, geo, report
+from . import __version__, audit, geo, report
 from .actions import build as build_actions
 from .checks_behaviour import check_c11, check_c14
 from .checks_channel import check_c10, check_c2, check_c8, lookalike_reason

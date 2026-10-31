@@ -7,6 +7,20 @@ Team of 3 (Yaksh, Aditya, Bahul) · Repo: https://github.com/yakshbhesaniya/Paye
 > Every teammate pastes sections 1–17 into `CLAUDE.md` before writing code.
 > **Hackathon rule: no code before 10:30.** Docs, sample texts and API exploration with curl are allowed prep.
 
+### As built: where the code intentionally differs from this plan (updated during build)
+
+| Area | Plan | As built, and why |
+|---|---|---|
+| Crustdata outage | R7 HOLD on LOW confidence | Extra rule in R3: C1 `api_error`/`not_enabled` → HOLD "Crustdata unavailable", even if graph history would give HIGH confidence (fail safe) |
+| Invalid domains | — | Crustdata returns **HTTP 400** for invalid domains (e.g. `.example`): treated as "no match", then fall back to the name |
+| DNS checks | dns.google | dns.google is blocked on the venue network: Cloudflare DoH first, Google as fallback |
+| Brand lookalike when the vendor is unresolved | compare with the vendor-name token | Compare only with domains of vendors **we already know** (graph). An unknown vendor emailing from its own-name domain (`acme-corp.com` for "Acme Corp") is normal, never a lookalike |
+| Onboarding REJECT | lookalike or unregistered domain | REJECT only on impersonation of a known company's domain; a non-existent or unknown domain → REVIEW (absence ≠ fraud) |
+| Onboarding name match | best confidence | Prefer a name match that has a domain on record ("Zoho Corporation" → Zoho, not a domainless subsidiary) |
+| Watchers (C7) | on PAY | Opt-in with `PAYEEGUARD_WATCHERS=1`, so demos never create real watches |
+| Insider check | P1 | Built into onboarding; active when `policy.toml [buyer] buyer_domain` is set |
+| Team branches | three implementations merged | `yaksh-crustdata` holds the integrated code; Aditya's and Bahul's branches are merged (history kept) and their test scenarios are ported to the integrated API. See `docs/EDGE_CASE_REPORT.md` |
+
 ---
 
 ## 0. TL;DR

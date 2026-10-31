@@ -142,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}")
         except ValueError:
             return self._json(400, {"error": "invalid JSON"})
+        if not isinstance(body, dict):
+            return self._json(400, {"error": "JSON object expected"})
         routes = {"/api/verify": api_verify, "/api/onboard": api_onboard,
                   "/api/pay": lambda b: api_gate("pay", b), "/api/resolve": lambda b: api_gate("resolve", b)}
         if self.path == "/api/reset":

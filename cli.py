@@ -211,5 +211,18 @@ def main(argv=None) -> int:
     return 0
 
 
+def run() -> int:
+    """Friendly errors instead of tracebacks for user mistakes (missing file, missing secret, bad config)."""
+    try:
+        return main()
+    except FileNotFoundError as e:
+        print(f"error: file not found: {e.filename}", file=sys.stderr)
+    except RuntimeError as e:          # e.g. PAYEEGUARD_FP_SECRET missing, seed vendor not resolvable
+        print(f"error: {e}", file=sys.stderr)
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+    return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())
