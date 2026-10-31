@@ -1,0 +1,31 @@
+{
+  "_note": "TEST DATA. Mode 2 vendor-onboarding requests (spec section 3.1), in the style of the official Trust and compliance sample request.",
+  "requests": [
+    {
+      "id": "onb_01_real",
+      "request": "Here is a new vendor: Freshworks, https://www.freshworks.com. Is it a real, trading business? Who runs it, how long has it existed, and is anything off?",
+      "vendor_name": "Freshworks",
+      "website": "https://www.freshworks.com",
+      "claimed_country": "US",
+      "expected": "APPROVE"
+    },
+    {
+      "id": "onb_02_unknown",
+      "request": "New vendor: Zentrix Global Solutions Pvt Ltd, https://zentrixglobal.example. They say they have 120 employees across three offices in Pune. Check it.",
+      "vendor_name": "Zentrix Global Solutions Pvt Ltd",
+      "website": "https://zentrixglobal.example",
+      "claimed_country": "IN",
+      "claimed_headcount": 120,
+      "claimed_offices": 3,
+      "expected": "REVIEW"
+    },
+    {
+      "id": "onb_03_lookalike",
+      "request": "Please onboard Zoho Corporation as a vendor, website https://zoh0-corp.com.",
+      "vendor_name": "Zoho Corporation",
+      "website": "https://zoh0-corp.com",
+      "claimed_country": "IN",
+      "expected": "REJECT"
+    }
+  ]
+}

@@ -44,9 +44,27 @@ Team of 3 (Yaksh, Aditya, Bahul) · Repo: https://github.com/yakshbhesaniya/Paye
 ## 1. Hackathon context and what wins
 
 - **Brief:** pick a paid job and build agents that do *all* of it. Humans only for exceptions; every decision cites its reasons; five hours.
-- **Due at 15:30 code freeze:** the repo, plus a demo video of the product taking a request it has never seen all the way to finished work.
+- **Due at 15:30 code freeze:** the repo (with README), plus a **Loom** demo video of the product taking a request it has never seen all the way to finished work. Submission is through a form; ask for the link in the WhatsApp group. Video length isn't stated on the slides: confirm in the group (we plan ≤ 2:00).
 - **Judges:** Crustdata (Yashwant Akash, Rishabh Raj) want *meaningful use of identity resolution and relationships*. IIT Bombay professors want *rigour*: no absence-of-evidence errors, no double counting, reproducibility, honest evaluation.
-- **Criteria:** end-to-end execution · data integrity and verification · robustness and edge cases · demo clarity.
+- **Help on the floor:** Jai or anyone from the Crustdata team (credits, API, MCP, design); WhatsApp group (submission form); Techfest: Aryan Tamboli / Satwik Patil (halls, Wi-Fi, urgent).
+
+### 1.1 Official judging (from the kickoff slides): five criteria scored 1–5, total 100
+
+| Criterion | Points | What judges ask | How PayeeGuard scores |
+|---|---|---|---|
+| **End-to-end execution** | 25 | Does it take a request it has never seen all the way to finished work, with a person stepping in only for exceptions? | Raw email → verdict → finished work (payment instruction / callback + email + ticket / case file) → payment gate; HOLD is the only human step. **Plus Mode 2 vendor onboarding** (section 3.1) for the "new vendor" style of request |
+| **Facts and verification** | 20 | Is every fact correct, and does every decision show its reasons and sources? | Citation on every ledger row and graph edge; decision rule recorded; investigator states what it ruled out |
+| **Robustness and edge cases** | 20 | Does it keep working on messy inputs, unusual cases and tools that fail? | Section 13 matrix (74 cases, each tested); fail-safe HOLD; offline cache |
+| **Customer value and idea** | 20 | Would a business pay for this today, and is the approach new? | Replaces paid AP verification work; per-invoice pricing (section 19a); new approach = identity graph + money-trail graph, not keyword rules |
+| **Demo and understanding** | 15 | Does the demo show the job clearly, and does the team understand the problem? | Hero "every identity check passed"; README and video answer the six questions in section 19b |
+
+### 1.2 The official sample request closest to us
+
+The kickoff slides give one sample request per theme. **Trust and compliance:** *"Here is a new vendor's name and website. Tell me whether it is a real, trading business: who runs it, how long it has existed, and anything that looks off."* Judges may give exactly this style of unseen request in the finals. That's why v3 adds **Mode 2: vendor onboarding** (section 3.1). The **Insurance** sample ("check claims against public data and tell me what does not match") is the same claimed-vs-actual pattern our checks already use.
+
+### 1.3 Crustdata's official API list (slide)
+
+Person Search · Person Enrich · Company Search · Company Identify ("matching vendors, invoices and leads", literally our use case) · Company Enrich · Job Search · Web Search and Fetch · Watcher · MCP server. **Person Identify isn't on the list** (and is 403 on our key), so nothing may depend on it.
 - **Format:** free. "A single agent, a system of agents, an MCP server or a CLI." We ship **one service agent** (Claude orchestrating PayeeGuard through MCP) with deterministic investigators, plus a CLI.
 
 ---
@@ -74,7 +92,35 @@ Team of 3 (Yaksh, Aditya, Bahul) · Repo: https://github.com/yakshbhesaniya/Paye
  cross-check     domains, offices           invoice no. vs paid invoices                                    BLOCK: case file
 ```
 
-- **One service agent.** Claude reads messy input, calls `verify_payee`, presents the result and may call `pay_invoice` / `resolve_case`.
+- **One service agent.** Claude reads messy input, calls `verify_payee` (Mode 1) or `onboard_vendor` (Mode 2), presents the result and may call `pay_invoice` / `resolve_case`.
+- **Two MCP servers in Claude:**
+  1. **PayeeGuard MCP** (`server.py`, ours) makes every decision deterministically.
+  2. **Crustdata MCP** (`https://install.crustdata.com/mcp`, theirs; add it as a connector in Claude Desktop and sign in with the Crustdata account) is for *follow-up research* the judge asks for after a verdict, e.g. "tell me more about this founder's background" or "what else has this company been hiring for?". Rule: Crustdata MCP answers questions; it **never** changes a PayeeGuard verdict. Shows Crustdata's MCP alongside our own on stage.
+
+### 3.1 Mode 2: Vendor onboarding / KYB **[NEW, P0-lite]**
+
+Handles the official sample request: *"Here is a new vendor's name and website. Is it a real, trading business: who runs it, how long has it existed, anything off?"* It reuses Mode 1 code. Owners: Yaksh (facts in `checks_company.py`: `onboard_facts()`), Bahul (`onboard_vendor` tool, report, decision).
+
+**Tool:** `onboard_vendor(vendor_name: str, website: str, claimed_country?: str, claimed_headcount?: int, claimed_offices?: int)` → Markdown **Vendor Trust Report**.
+
+| Question | How (all cited) | Crustdata data |
+|---|---|---|
+| Is it real? | Company Identify by the **website's** registrable domain (exact) and by name; same id? Website domain ∈ `all_domains`? Lookalike of a known brand? | Identify (free) |
+| Who runs it? | Founders + CXOs: name, title, `start_date` at this company, `crustdata_person_id` | Enrich `people.founders`, `people.cxos` (subfields only, ~0.5 MB; never the full `people` group) |
+| How long has it existed? | `year_founded` vs website domain registration date (RDAP); a flag if the domain is much younger than the claimed founding | Enrich `basic_info.year_founded` + RDAP |
+| Is it trading? | `headcount.total` + `growth_percent`, `hiring.openings_count`, web traffic present, funding rounds | Enrich `headcount`, `hiring`, `web_traffic`, `funding` |
+| Does the claim match? (Insurance-style) | Claimed country / headcount / office count vs `locations` and `headcount.total` (±25% tolerance) | Enrich `locations`, `headcount` |
+| Anything off? | Contradictions list: website not the company's domain, domain < 90 days, ≥ 2 shell signals, no leaders found, headcount collapse (yoy < −30%), claim mismatches | — |
+| Official contact | `funding.phone_number`, `funding.contact_email` (✅ present for Freshworks: +1 (855) 747 6767, support@freshworks.com) | Enrich `funding` |
+
+**Decision (deterministic, same "absence ≠ fraud" rule):**
+- **REJECT:** the website domain is a lookalike of another company's domain, or not registered.
+- **REVIEW:** company not found, ambiguous match, website not in `all_domains`, domain < 90 days, ≥ 2 shell signals, or any claim mismatch.
+- **APPROVE:** otherwise.
+
+**Finished work:** APPROVE writes the vendor into the graph (`ONBOARDED` edge: company → website domain, with the official contact), so later invoices from that domain confirm `channel`, and creates a Company Watcher (P1). REVIEW writes a `kyb_onboarding_task.md` listing exactly what a human must collect. Cost ≈ 2–3 credits per vendor.
+
+**Samples:** `samples/onboarding.json` (✅ written) holds 3 requests with expected decisions.
 - **Investigators** are deterministic Python modules (company, channel, signatory, payment/graph, behaviour). On stage call them "investigators", not "agents".
 - **Agent marketplace** (scripted buyer, seller and attacker agents): **P2, cut by default.** It's a circular evaluation and a time sink. Build it only if everything else is done.
 - **Out of scope** (say so if asked): moving real money, sending emails or calling anyone (all outbound is DRAFT/SIMULATED); bank-registry account validation; sanctions lists; a web app.
@@ -235,7 +281,7 @@ content-type: application/json
 | Usage | `GET /account/usage/summary` | — | debugging | free ✅ tested |
 | Permissions | `GET /permissions` returns **404** on our key; skip it | — | — | — |
 | Company Identify | `POST /company/identify` | `{"domains":["x.com"],"exact_match":true}` or `{"names":["X"]}` | C1 | free ✅ tested |
-| Company Enrich | `POST /company/enrich` | `{"crustdata_company_ids":[id],"fields":["basic_info","headcount","locations","web_traffic"]}`; **do NOT request `people` by default** (6 MB response for Freshworks: 300 decision makers) | C1, C4, C5 | 2 credits · **15/min** ✅ tested |
+| Company Enrich | `POST /company/enrich` | `{"crustdata_company_ids":[id],"fields":["basic_info","headcount","locations","web_traffic","funding","hiring"]}` (`funding` carries the official phone and email for C6). **Never request the whole `people` group** (6 MB for Freshworks: 300 decision makers); Mode 2 requests the subfields `"people.founders","people.cxos"` only (✅ tested: 487 KB) | C1, C4, C5 | 2 credits · **15/min** ✅ tested |
 | Person Identify | `POST /person/identify` | `{"emails":["a@x.com"]}` | C3 | ❌ **403 permission_error on our key**: C3 goes straight to Person Search; client caches the 403 |
 | Person Search | `POST /person/search` | filter tree, `limit`, `fields:["basic_profile","experience"]` | C3, insider | ~0.2 credits/result with these fields · **30/min** ✅ tested |
 | Web Fetch | `POST /web/enrich/live` | `{"urls":[...]}` ≤ 10 → `[{"success","url","timestamp","title","content"(HTML),"http_status"}]` | C6 callback | ~1 credit ✅ tested |
@@ -281,6 +327,10 @@ Tested 2026-10-31 ~10:00 IST with our key.
 | Person Identify enabled on our key? | ❌ 403 `permission_error` |
 | Web Fetch path and cost | ✅ `POST /web/enrich/live`, ~1 credit; `https://www.freshworks.com/company/contact/` returns `http_status` 404 inside a 200 response, so check `http_status` and try fallbacks |
 | Credits path | ✅ `GET /user/credits`; `/permissions` is 404 |
+| Enrich subfields | ✅ `"people.founders","people.cxos"` return only those lists (Freshworks: 20 founders, 29 CXOs, 487 KB) |
+| Official contact in Crustdata | ✅ `funding.contact_email` = support@freshworks.com, `funding.phone_number` = +1 (855) 747 6767 |
+| Hiring signal | ✅ Enrich `hiring.openings_count` = 11 for Freshworks (also `recent_titles_csv`, `open_jobs_timeseries`) |
+| Job Search | ⚠️ `POST /job/search` exists but `company_id` isn't a valid filter field (400). Not needed: use Enrich `hiring` |
 | Credits on our key | ✅ **15,196.54** (event credits arrived; 3.46 used by these tests) |
 
 ---
@@ -339,7 +389,7 @@ Note: samples use invented people, so they'll show "not found" (no penalty). Tim
 - **C1_vendor:** Identify by `vendor_domain` (`exact_match`), else by `vendor_name`. Pick the best `confidence_score`. If the top two are within 0.05: prefer domain-token overlap with the sender, else **unchecked** (ambiguous) with the runner-up in detail. Match with confidence ≥ 0.8 → verified `confirms="who"`; then **one** Enrich call into `ctx["company"]`. **No match → unchecked/no_data (never contradicted).**
 - **C4_shell:** contradicted (15) only if **≥ 2** of: founded ≤ 12 months, `headcount.total` ≤ 3, no web traffic. A single signal is a detail-only row.
 - **C5_geo** is in PAYMENT (below).
-- **C6_callback** (CONTEXT, 0 weight): one Web Fetch call (≤ 10 URLs) on the vendor's Crustdata `basic_info.website` root + `/contact`, `/contact-us`, `/company/contact`, `/about/contact`. Use the first result with `success` and `http_status` 200 (the API returns 200 even when the page is a 404, as we saw on freshworks.com). Regex out phone/email; fallback Web Search `site:<primary_domain> contact`. Fills `Verdict.callback`. **Never use contact details from the invoice.**
+- **C6_callback** (CONTEXT, 0 weight): **first** use Crustdata's own official contact from the Enrich `funding` group: `funding.phone_number` and `funding.contact_email` (✅ verified present for Freshworks), cited as `crustdata:company/<id>#funding.phone_number`. Only if both are missing: one Web Fetch call (≤ 10 URLs) on the vendor's Crustdata `basic_info.website` root + `/contact`, `/contact-us`, `/company/contact`, `/about/contact`. Use the first result with `success` and `http_status` 200 (the API returns 200 even when the page is a 404, as we saw on freshworks.com). Regex out phone/email; fallback Web Search `site:<primary_domain> contact`. Fills `Verdict.callback`. **Never use contact details from the invoice.**
 - **C7_watch** (CONTEXT, P1): on PAY, `POST /watch/company` on `crustdata_company_ids` tracking `basic_info.primary_domain` and `basic_info.name` `changed`; if C3 found a profile URL, `POST /watch/person` tracking `experience.employment_details.current` `added` with `keys:["crustdata_company_id","name"]`. A 403 → skip with "monitoring not enabled".
 
 ### PAYMENT: is the money going where it should? (Aditya, except C5/C11 by A)
@@ -506,6 +556,7 @@ HIGH = 3 confirmed · MEDIUM = 2 · LOW ≤ 1.
 **MCP tools** (`server.py`):
 
 - `verify_payee(raw_text, vendor_name?, vendor_domain?, sender_email?, sender_name?, sender_title?, reply_to_email?, remit_country?, bank_iban?, bank_account?, bank_swift?, amount?, currency?, invoice_number?, bank_change_requested?, urgency_language?)` → Markdown report. The server always runs `extract.py` on `raw_text` and applies X1.
+- `onboard_vendor(vendor_name, website, claimed_country?, claimed_headcount?, claimed_offices?)` → Vendor Trust Report, APPROVE / REVIEW / REJECT (Mode 2, section 3.1).
 - `pay_invoice(case_id)` → gate: allowed only if PAY, or HOLD approved by a human. Writes `payments/outbox.jsonl` (SIMULATED) + graph `PAID`. Otherwise **refuses**, quoting the decision rule and the top evidence.
 - `resolve_case(case_id, decision: approve|reject|override, reviewer, note)` (P1):
   - on HOLD, **approve** lets `pay_invoice` proceed and teaches the graph;
@@ -523,6 +574,7 @@ HIGH = 3 confirmed · MEDIUM = 2 · LOW ≤ 1.
   ```
   The server loads `.env` from its own folder, so the key is not put in this file. For the demo recording, set `PAYEEGUARD_OFFLINE=1` in `.env`.
 - **Claude Code:** from the repo root, `claude mcp add payeeguard -- .venv/Scripts/python.exe server.py`.
+- **Crustdata MCP (second server, for follow-up research):** in Claude Desktop add a custom connector with URL `https://install.crustdata.com/mcp` and sign in with the Crustdata account (OAuth, no key in config). In Claude Code: `claude mcp add --transport http crustdata https://install.crustdata.com/mcp`. Each call costs credits; the server reports the amount. Confirm the setup with Jai/Crustdata team on the floor if sign-in fails.
 
 **CLI:** `python cli.py verify FILE` · `pay CASE` · `resolve CASE approve --by NAME --note ...` · `eval` · `ablate` · `audit verify` · `seed`.
 
@@ -769,7 +821,7 @@ PayeeGaurd/
 | **12:15** | **Merge 1:** 01 PAY, 02 BLOCK, 04 HOLD via CLI | | |
 | 12:15–13:30 | C11; C6 callback; C4; offline mode | C3 timeline + role; graph writes on PAY/BLOCK (`PAID`, `FLAGGED_IN`) | `investigator.py`; `actions.py` + case file; `gate.py`; `server.py`; `cli.py` |
 | **13:30** | **Merge 2:** all 10 samples hit expected verdict + attack type; **05 → 06 hero sequence works** | | |
-| 13:30–14:15 | C8 RDAP, C10 Reply-To, C14 tactics, C7 watcher (P1) | insider check (P1), `audit.py`, fixture tests | X1 cross-check, Mermaid, `ablation.py`, `resolve_case` |
+| 13:30–14:15 | **`onboard_facts()` for Mode 2 first (~30 min)**, then C8 RDAP, C10 Reply-To, C14 tactics, C7 watcher (P1) | insider check (P1), `audit.py`, fixture tests, start `docs/BUILD_LOG.md` → README "what failed" | **`onboard_vendor` tool + report (~30 min)**, X1 cross-check, Mermaid, `ablation.py`, `resolve_case` |
 | 14:15–14:30 | **Freeze demo cache**, commit | README graph + robustness | Rehearse hero offline twice |
 | 14:30–15:00 | Clean repo, tests green | Review report and case-file wording | **Record the video** (+ CLI backup take) |
 | 15:00–15:20 | Final push | Buffer | Upload video, submit |
@@ -901,7 +953,8 @@ Record a CLI backup of 05 → 06. Rehearse twice offline.
 ## 19. Cut list (in order)
 
 1. Agent marketplace, HTML report, CI, domain hunting (already P2)
-2. Insider check → README example only
+2. Insider check → README example only; Crustdata MCP connector → mention only
+3. Mode 2 onboarding claim-matching (headcount/offices) → keep "real? who runs it? how old? anything off?"
 3. C7 watchers → "monitoring not enabled" line
 4. `resolve_case` → keep `pay_invoice` gate for PAY only
 5. C8, C10, C14 beyond payment_method
@@ -943,6 +996,21 @@ Deterministic, auditable decisions · fail-safe on outages · missing data never
 ### Business model (for Q&A)
 
 Per-verification pricing for AP teams and AI-agent platforms (e.g. a fixed fee per invoice checked, well under the cost of one analyst-minute), plus a monthly fee for continuous vendor monitoring through Watchers. Buyers: mid-size companies with AP teams, AP-automation and AI-payments platforms (embedded via MCP/API), and audit firms doing vendor due diligence.
+
+---
+
+## 19b. README and Loom video: what the judges said they want to hear
+
+From the kickoff slide "What we want to hear": *"Above all, how well you understand the problem. In your Loom video, your README and the finals."* The README must have these six sections (Bahul writes, everyone feeds in), and the video and finals pitch must touch each one:
+
+| Judges' question | Our answer (README section) |
+|---|---|
+| **The service:** who pays for it today, and why we picked it | AP teams, vendor-master teams, payment-fraud analysts and audit firms pay people to verify payees; invoice fraud averages $367k per incident; AI agents are starting to pay invoices with no one checking the payee |
+| **The approaches:** the options we weighed and why we chose ours | (1) LLM decides → rejected: not reproducible, prompt-injectable. (2) Keyword/rules checklist (our v1/v2) → rejected: double counting, treats missing data as fraud, misses real-mailbox attacks. (3) **Identity graph (Crustdata) + money-trail graph + deterministic investigator → chosen.** Also weighed separate LLM agents per check → rejected (cost, non-determinism) |
+| **What failed:** what worked and what didn't | Keep a running log in `docs/BUILD_LOG.md` from 10:30 (one line per failure). Already found before building: Person Identify is 403 on our key (→ Person Search); `/permissions` returns 404; Enrich with full `people` returns 6 MB (→ subfields); Freshworks' contact page is a 404 inside a 200 (→ Crustdata `funding.phone_number`); Job Search has no company-id filter (→ Enrich `hiring`); the first scoring design blocked legitimate small vendors (→ risk vs confidence) |
+| **The hardest case** and how we handle it | A real vendor's real mailbox asking to pay a new account (BEC via compromised mailbox): every identity check passes, so we follow the money (account history + accounts tied to blocked cases) = hero demo |
+| **The testing:** how we know it works | 10-sample eval with expected verdicts + attack types, 3 onboarding samples, section 13 edge-case tests (offline fixtures), ablation table, deterministic re-runs |
+| **What comes next:** what we'd improve, and why now isn't the time | Section 19a roadmap; for each item say why not today: needs customer data (calibration), customer systems access (mailbox, ERP), partnerships (bank name-check), or legal review (DPDP/GDPR) |
 
 ---
 
