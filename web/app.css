@@ -359,3 +359,14 @@ table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
 .impact span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .resume { margin-top: 26px; }
 .resume .btn { box-shadow: 3px 3px 0 var(--ink); }
+
+/* ---- live connection lights ---- */
+.conn { display: inline-flex; gap: 12px; flex-wrap: wrap; }
+.conn .dot { font: 11.5px var(--mono); color: var(--ink-2); white-space: nowrap; }
+.conn .dot i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0; background: #b9b3a6; }
+.conn .dot.on { color: var(--ink); }
+.conn .dot.on i { background: var(--pay); box-shadow: 0 0 0 0 rgba(29,127,71,.5); animation: pulse 2s infinite; }
+.live-h i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--block); margin-right: 6px; animation: pulse 1.6s infinite; }
+.live-list { margin-bottom: 14px; border-bottom: 2px solid var(--ink); }
+.err-inline { color: var(--block); text-transform: none; }
+.btn.red { box-shadow: 3px 3px 0 var(--ink); }

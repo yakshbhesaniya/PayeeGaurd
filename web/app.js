@@ -466,6 +466,9 @@ function docTools(a, v) {
   if ((a.kind === "callback_script" || a.kind === "exception_ticket") && phone) {
     tools.push(`<a class="btn" href="tel:${phone.replace(/[^\d+]/g, "")}">Call ${esc(phone)} (official number)</a>`);
   }
+  if (INTEG.email && a.kind === "verification_email_draft") {
+    tools.unshift(`<button class="btn red" data-send="${esc(a.kind)}">Send now (live)</button>`);
+  }
   tools.push(`<button class="btn ghost" data-download="1">Download .md</button>`);
   return `<div class="doctools">${tools.join("")}</div>`;
 }
@@ -477,6 +480,15 @@ function showDoc(a, v) {
   if (!el || !a) return;
   el.dataset.label = DOC_LABEL[a.kind] || "DOCUMENT";
   el.innerHTML = docTools(a, v) + md(a.body || "");
+  el.querySelector("[data-send]")?.addEventListener("click", async (ev) => {
+    const btn = ev.currentTarget; btn.disabled = true; btn.textContent = "Sending…";
+    try {
+      const r = await api("/api/send", { case_id: v.case_id, kind: a.kind });
+      btn.textContent = r.ok ? "Sent ✓" : "Not sent";
+      const note = document.createElement("p"); note.className = `teleprinter ${r.ok ? "good" : "bad"}`; note.textContent = r.message;
+      el.querySelector(".doctools").after(note);
+    } catch (err) { btn.textContent = "Not sent"; }
+  });
   el.querySelector("[data-download]")?.addEventListener("click", () => {
     const blob = new Blob([stripBanner(a.body || "")], { type: "text/markdown" });
     const link = document.createElement("a");
@@ -518,3 +530,31 @@ function offerResume() {
   $("#empty").appendChild(box);
   $("#resumeBtn").addEventListener("click", () => { box.remove(); restoreLast(); });
 }
+
+
+/* ---------- live connections: status lights + real-time mailbox ---------- */
+let INTEG = {};
+async function loadIntegrations() {
+  try { INTEG = await api("/api/integrations"); } catch { INTEG = {}; }
+  const items = [["crustdata", "Crustdata"], ["inbox", "Inbox"], ["email", "Email"], ["payments", INTEG.gateway ? `Payments · ${INTEG.gateway} test` : "Payments"], ["alerts", "Alerts"]];
+  $("#conn").innerHTML = items.map(([k, label]) => `<span class="dot ${INTEG[k] ? "on" : "off"}" title="${INTEG[k] ? "live" : "not connected: demo mode"}"><i></i>${esc(label)}</span>`).join("");
+  if (INTEG.inbox) { pollLive(); setInterval(pollLive, 15000); }
+}
+async function pollLive() {
+  try {
+    const r = await api("/api/live-inbox");
+    const box = $("#liveBox");
+    box.innerHTML = `<p class="hint small live-h"><i></i>Live mailbox · ${esc(r.inbox_user || "")}${r.error ? ` · <span class="err-inline">${esc(r.error)}</span>` : ""}</p>
+      ${r.items.length ? `<ol class="inbox live-list">${r.items.map((m, k) => `<li data-k="${k}" class="${m.state || m.decision ? "tagged" : ""}">
+        <span class="subj">${esc(m.subject || "(no subject)")}</span><span class="amt">${esc(m.received || "")}</span>
+        <span class="who">${esc(m.from)}</span>
+        ${m.state || m.decision ? `<span class="tagd ${({ RELEASED: "PAY", APPROVED: "PAY" })[m.state] || m.state || m.decision}">${esc(({ RELEASED: "PAID" })[m.state] || m.state || m.decision)}</span>` : ""}</li>`).join("")}</ol>`
+        : `<p class="hint">Waiting for mail. Forward any invoice or bank-change email to ${esc(r.inbox_user || "the mailbox")}.</p>`}`;
+    box.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
+      const m = r.items[+li.dataset.k];
+      document.querySelectorAll("#inbox li, .live-list li").forEach((x) => x.classList.toggle("on", x === li));
+      link(""); investigate(m.raw, null);
+    }));
+  } catch { /* keep the last list */ }
+}
+loadIntegrations();

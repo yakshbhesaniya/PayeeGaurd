@@ -26,7 +26,7 @@
     <span class="tag">Accounts-payable trust desk</span>
   </div>
   <div class="mast-right">
-    <span class="live"><i></i>Crustdata identity graph</span>
+    <span class="conn" id="conn" title="Live connections"></span>
     <span class="dateline" id="dateline"></span>
     <button class="linkish" id="resetBtn" title="Wipe the demo memory and reload the seeded payment history">Reset demo memory</button>
   </div>
@@ -52,6 +52,7 @@
 
     <section class="pane on" id="pane-inbox">
       <p class="hint">Unseen requests waiting for payment. Open one to investigate.</p>
+      <div id="liveBox"></div>
       <ol class="inbox" id="inbox"></ol>
     </section>
 

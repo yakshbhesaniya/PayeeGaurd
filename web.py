@@ -9,12 +9,13 @@ import json
 import mimetypes
 import sys
 import threading
+import time
 from dataclasses import asdict
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from payeeguard import config, gate
+from payeeguard import config, gate, integrations
 from payeeguard.client import CrustdataClient
 from payeeguard.extract import extract
 from payeeguard.graph import Graph, seed
@@ -83,7 +84,24 @@ def api_verify(body: dict) -> dict:
         state = (g.get_case(v.case_id) or {}).get("state", v.decision)
     finally:
         g.close()
+    _alert_async(v, extras.get("invoice") or {})
     return {"verdict": asdict(v), "markdown": md, "state": state, **extras}
+
+
+_ALERTED: set[str] = set()
+
+
+def _alert_async(v, inv: dict) -> None:
+    """Post one Slack/Teams alert per HOLD/BLOCK case (not on every re-open)."""
+    if v.decision == "PAY" or v.case_id in _ALERTED or not integrations.status()["alerts"]:
+        return
+    _ALERTED.add(v.case_id)
+    icon = ":octagonal_sign:" if v.decision == "BLOCK" else ":warning:"
+    attack = v.hypothesis.title if v.hypothesis else "key facts unverified"
+    amount = f"{inv.get('currency') or ''} {inv.get('amount'):,.2f}" if inv.get("amount") is not None else "amount n/a"
+    text = (f"{icon} *PayeeGuard {v.decision}* · {inv.get('vendor') or 'unknown vendor'} · {amount}\n{attack} "
+            f"(risk {v.risk_score}, {v.decision_rule}) · case `{v.case_id}`")
+    threading.Thread(target=integrations.alert, args=(text,), daemon=True).start()
 
 
 def api_onboard(body: dict) -> dict:
@@ -173,17 +191,88 @@ def api_screen(body: dict) -> dict:
         g.close()
 
 
+def api_send(body: dict) -> dict:
+    """Really send a drafted email (verification / vendor warning) through SMTP. Safe recipient unless enabled."""
+    import re
+    cid, kind = str(body.get("case_id") or ""), str(body.get("kind") or "verification_email_draft")
+    if not re.fullmatch(r"[0-9a-f]{12}", cid) or not re.fullmatch(r"[a-z_]+", kind):
+        return {"ok": False, "message": "bad case or document id"}
+    path = config.reports_dir() / cid / f"{kind}.md"
+    if not path.is_file():
+        return {"ok": False, "message": "Document not found; open the case again first"}
+    text = path.read_text(encoding="utf-8").split("\n\n", 1)[-1]          # drop the draft banner line
+    to = (re.search(r"^To:\s*(.+)$", text, re.M) or [None, None])[1]
+    subj = (re.search(r"^Subject:\s*(.+)$", text, re.M) or [None, "PayeeGuard verification"])[1]
+    msg = re.sub(r"^(To|Subject):.*\n?", "", text, flags=re.M).strip()
+    return integrations.send_email(to.strip() if to else None, subj.strip(), msg)
+
+
+LIVE_FILE = config.data_dir() / "live_inbox.json"
+LIVE: list[dict] = []
+LIVE_ERR: list[str] = []
+
+
+def _load_live() -> None:
+    try:
+        LIVE.extend(json.loads(LIVE_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        pass
+
+
+def _save_live() -> None:
+    LIVE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LIVE_FILE.write_text(json.dumps(LIVE[-50:]), encoding="utf-8")
+
+
+def poll_inbox_forever(every: int = 20) -> None:
+    """Real-time inbox: every N seconds fetch unread mail, verify it, keep it for the desk, alert on HOLD/BLOCK."""
+    seen = {m["message_id"] for m in LIVE}
+    while True:
+        try:
+            for m in integrations.fetch_unseen():
+                if m["message_id"] in seen:
+                    continue
+                seen.add(m["message_id"])
+                with LOCK:
+                    r = api_verify({"raw_text": m["raw"]})
+                v = r["verdict"]
+                LIVE.append({**m, "case_id": v["case_id"], "decision": v["decision"], "received": time.strftime("%H:%M")})
+                _save_live()
+            LIVE_ERR.clear()
+        except Exception as e:  # noqa: BLE001 - keep polling; show the error in the desk
+            LIVE_ERR[:] = [f"{type(e).__name__}: {str(e)[:120]}"]
+        time.sleep(every)
+
+
+def api_live(_body: dict | None = None) -> dict:
+    g = _graph()
+    try:
+        items = []
+        for m in reversed(LIVE[-20:]):
+            case = g.get_case(m["case_id"]) or {}
+            items.append({k: m[k] for k in ("message_id", "subject", "from", "received", "raw", "case_id")} |
+                         {"decision": case.get("decision", m.get("decision")), "state": case.get("state")})
+    finally:
+        g.close()
+    return {"items": items, "error": LIVE_ERR[0] if LIVE_ERR else None, **integrations.status()}
+
+
 def api_gate(kind: str, body: dict) -> dict:
     g = _graph()
     try:
         cid = str(body.get("case_id") or "")
+        payment = None
         if kind == "pay":
             msg = gate.pay_invoice(cid, g, CLIENT)
+            if msg.startswith("RELEASED") and integrations.status()["payments"]:
+                d = (g.get_case(cid) or {}).get("data", {})
+                payment = integrations.create_payment(cid, d.get("amount"), d.get("currency"), d.get("vendor"))
+                msg += "\n" + payment["message"]
         else:
             msg = gate.resolve_case(cid, str(body.get("decision") or ""), str(body.get("reviewer") or "").strip(),
                                     str(body.get("note") or "").strip(), g)
         case = g.get_case(cid)
-        return {"message": msg, "state": case["state"] if case else None,
+        return {"message": msg, "state": case["state"] if case else None, "payment": payment,
                 "ok": not msg.startswith(("Refused", "Unknown", "decision must", "reviewer and note"))}
     finally:
         g.close()
@@ -215,6 +304,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, api_stats())
         if path == "/api/memory":
             return self._json(200, api_memory())
+        if path == "/api/integrations":
+            return self._json(200, integrations.status())
+        if path == "/api/live-inbox":
+            return self._json(200, api_live())
         if path.startswith("/api/case/"):
             g = _graph()
             try:
@@ -241,7 +334,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json(400, {"error": "JSON object expected"})
         routes = {"/api/verify": api_verify, "/api/onboard": api_onboard, "/api/guard": api_guard,
-                  "/api/screen": api_screen,
+                  "/api/screen": api_screen, "/api/send": api_send,
                   "/api/pay": lambda b: api_gate("pay", b), "/api/resolve": lambda b: api_gate("resolve", b)}
         if self.path == "/api/reset":
             with LOCK:
@@ -269,6 +362,12 @@ def main() -> None:
     config.setup_logging()
     for line in ensure_seeded(a.reset):
         print("seeded:", line)
+    _load_live()
+    st = integrations.status()
+    print("live connections:", ", ".join(f"{k}={'on' if st[k] else 'off'}" for k in ("crustdata", "inbox", "email", "payments", "alerts")))
+    if st["inbox"]:
+        threading.Thread(target=poll_inbox_forever, daemon=True).start()
+        print(f"watching mailbox {st['inbox_user']} for new invoices")
     print(f"PayeeGuard desk on http://{a.host}:{a.port}")
     ThreadingHTTPServer((a.host, a.port), Handler).serve_forever()
 
